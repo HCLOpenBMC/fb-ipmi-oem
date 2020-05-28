@@ -17,7 +17,7 @@ add_definitions (-DBOOST_SYSTEM_NO_DEPRECATED)
 add_definitions (-DBOOST_ALL_NO_LIB)
 add_definitions (-DBOOST_NO_RTTI)
 add_definitions (-DBOOST_NO_TYPEID)
-add_definitions (-DBOOST_ASIO_DISABLE_THREADS)
+#add_definitions (-DBOOST_ASIO_DISABLE_THREADS)
 add_definitions (-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
 add_definitions (-Wno-psabi)
 
@@ -63,7 +63,7 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_library (zfboemcmds
              SHARED src/oemcommands.cpp src/appcommands.cpp
              src/storagecommands.cpp src/usb-dbg.cpp
-             src/selcommands.cpp src/transportcommands.cpp)
+             src/selcommands.cpp src/transportcommands.cpp src/biccommands.cpp)
 set_target_properties (zfboemcmds PROPERTIES VERSION "0.1.0")
 set_target_properties (zfboemcmds PROPERTIES SOVERSION "0")
 target_link_libraries (zfboemcmds sdbusplus)
