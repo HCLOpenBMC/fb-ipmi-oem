@@ -15,35 +15,14 @@
  * limitations under the License.
  */
 
-#include "xyz/openbmc_project/Common/error.hpp"
-#include <ipmid/api.h>
-//#include <ipmid/api.hpp>
-
-#include <nlohmann/json.hpp>
-#include <array>
-#include <commandutils.hpp>
-#include <cstring>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <fstream>
-#include <biccommands.hpp>
-//#include <ipmid/utils.hpp>
-#include <phosphor-logging/log.hpp>
-#include <sdbusplus/asio/connection.hpp>
-#include <sdbusplus/bus.hpp>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <chrono>
-
-#include <boost/algorithm/string/replace.hpp>
-#include <ipmid/handler.hpp>
-
-#include <sys/types.h>
-#include <unistd.h>
-
 #include <ipmid/api.hpp>
+
+#include <iostream>
+#include <commandutils.hpp>
+#include <biccommands.hpp>
+#include <phosphor-logging/log.hpp>
+#include <vector>
+
 namespace ipmi
 {
 
@@ -51,51 +30,114 @@ using namespace phosphor::logging;
 
 static void registerBICFunctions() __attribute__((constructor));
 
-//sdbusplus::bus::bus dbus(ipmid_get_sd_bus_connection()); // from ipmid/api.h
+extern message::Response::ptr executeIpmiCommand(message::Request::ptr);
 
-constexpr uint8_t ipmbAddressTo7BitSet(uint8_t address)
-{
-    return address >> 1;
-}
 
-extern message::Response::ptr executeIpmiCommand(message::Request::ptr request);
-
-// Added for debug
+//----------------------------------------------------------------------
+// ipmiOemBicHandler (IPMI/Section - ) (CMD_OEM_BIC_INFO)
+// This Function will handle BIC request for netfn=0x38 and cmd=1  
+// send the response back to the sender.
+//----------------------------------------------------------------------
+ 
 ipmi_ret_t ipmiOemBicHandler(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
                                 ipmi_request_t request,
                                 ipmi_response_t response,
                                 ipmi_data_len_t data_len,
                                 ipmi_context_t context)
 {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-          "[FBOEM][IPMI BIC HANDLER] Called 1\n");
+	                          
+	uint8_t *reqData =  reinterpret_cast<uint8_t *>(request);
+        uint8_t *resp = reinterpret_cast<uint8_t *>(response); 
+	
+	uint8_t netfnReq   = 0;
+	uint8_t netfnRes   = 0;
+        uint8_t cmdReq     = 0;
+        int respHeader     = 0;
+	int rqSA           = 0;
+        uint8_t userId     = 0;
+        uint32_t sessionId = 0;
+        uint8_t channel    = 0;
+	int i = 0;
 
-	ipmi_bic_req_t *bic_req = reinterpret_cast<ipmi_bic_req_t *>(request);
+        std::vector<uint8_t> data;
+            
+        ipmi::message::Response::ptr res;	
+	boost::asio::io_service io_service;
 
-	printf(" header : %x\t%x\t%x\t%x \n", bic_req->data[0], bic_req->data[1], bic_req->data[2], bic_req->data[3]);
-	printf(" netfn : %x\n", bic_req->ipmi_req.netfn);
-	printf(" cmd : %x\n", bic_req->ipmi_req.cmd);
-
+#ifdef BIC_DEBUG
+        printf("Received command len := %d\n", *data_len);
+        printf(" Received command = ");	
+	for(i=0; i<*data_len;  i++)
+	{
+	    printf("%x:", reqData[i]);
+	}       
+	printf("\n"); 
 	std::cout.flush();
+#endif
 
-       Privilege privilege = Privilege::Admin;
-       int rqSA = 0;
-       uint8_t userId = 0; // undefined user
-       uint32_t sessionId = 0;
-       uint32_t channel= 0;
-       boost::asio::yield_context yield;
-       std::vector<uint8_t> data;
+	//Parsing netfn, cmd from the request
+ 	netfnReq = reqData[4] >> 2;
+        cmdReq = reqData[5];
 
-        auto ctx =
-        std::make_shared<ipmi::Context>(getSdBus(), bic_req->ipmi_req.netfn, bic_req->ipmi_req.cmd, channel, userId,
-                                        sessionId, privilege, rqSA, yield);
-    auto req = std::make_shared<ipmi::message::Request>(
-        ctx, std::forward<std::vector<uint8_t>>(data));
-     message::Response::ptr resp = executeIpmiCommand(req); 
+#ifdef BIC_DEBUG
+        printf("netfn = %x\n", netfnReq);
+        printf("cmd = %x\n", cmdReq);
+	std::cout.flush();
+#endif
 
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-          "[FBOEM][IPMI BIC HANDLER] Called 2\n");
-      
+	//copy the data from the request
+	if(*data_len > DATA_BYTE_IDX)
+	{
+            std::copy(&reqData[DATA_BYTE_IDX], &reqData[*data_len], back_inserter(data));
+	}
+	
+
+	//Boot spwan is used for calling executeipmi command  
+   	boost::asio::spawn(io_service, [&](boost::asio::yield_context yield) {
+	
+        std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
+        auto ctx = std::make_shared<ipmi::Context>(
+            bus, netfnReq, cmdReq, channel, userId, sessionId, ipmi::Privilege::Admin, rqSA, yield);
+        auto req = std::make_shared<ipmi::message::Request>(
+            ctx, std::forward<std::vector<uint8_t>>(data));
+
+	//Calling executeIpmiCommand request function
+        res = ipmi::executeIpmiCommand(req);
+ 
+	});
+
+	// Run the io service
+        io_service.run_one();	
+	
+        *data_len = 0; 
+
+	//Add 1 to netfn to send the resposne netfn     
+        netfnRes = netfnReq + 1;
+
+	//copy the IANA 3 bytes and interface 1 bytes to Resp buffer
+	std::memcpy(resp, reqData, SIZE_IANA_ID);
+	resp[SIZE_IANA_ID + respHeader++] = reqData[3];
+
+	//copy the netfn, cmd, completion code to Resp buffer	
+        resp[SIZE_IANA_ID + respHeader++] = netfnRes << 2;
+        resp[SIZE_IANA_ID + respHeader++] = cmdReq;
+        resp[SIZE_IANA_ID + respHeader++] = res->cc;
+
+	//copy the payload to the Resp buffer
+	std::memcpy(resp+(SIZE_IANA_ID+respHeader), res->payload.raw.data(), res->payload.size());   
+	*data_len =  SIZE_IANA_ID + res->payload.size() + respHeader;
+
+#ifdef BIC_DEBUG
+        printf(" Data_len :: %d\n", *data_len);
+        printf(" Resp Data :: ");
+        for(i=0; i<*data_len; i++)
+	{
+            printf("%x:", resp[i]);
+        } 
+	
+	printf("\n");
+	std::cout.flush();       
+#endif
         return IPMI_CC_OK;
 }
 
@@ -105,9 +147,10 @@ static void registerBICFunctions(void)
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Registering BIC commands");
 
+    //Yv2 BIC command handler for netfn=0x38 cmd=1
     ipmiPrintAndRegister(NETFUN_FB_OEM_BIC, CMD_OEM_BIC_INFO, NULL,
                           ipmiOemBicHandler,
-                         PRIVILEGE_USER); // Yv2 Bic Info
+                         PRIVILEGE_USER);
     return;
 } 
 
