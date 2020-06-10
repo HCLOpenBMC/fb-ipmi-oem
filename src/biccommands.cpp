@@ -57,33 +57,15 @@ ipmi_ret_t ipmiOemBicHandler(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
         uint8_t userId     = 0;
         uint32_t sessionId = 0;
         uint8_t channel    = 0;
-	int i = 0;
 
         std::vector<uint8_t> data;
             
         ipmi::message::Response::ptr res;	
 	boost::asio::io_service io_service;
 
-#ifdef BIC_DEBUG
-        printf("Received command len := %d\n", *data_len);
-        printf(" Received command = ");	
-	for(i=0; i<*data_len;  i++)
-	{
-	    printf("%x:", reqData[i]);
-	}       
-	printf("\n"); 
-	std::cout.flush();
-#endif
-
 	//Parsing netfn, cmd from the request
  	netfnReq = reqData[4] >> 2;
         cmdReq = reqData[5];
-
-#ifdef BIC_DEBUG
-        printf("netfn = %x\n", netfnReq);
-        printf("cmd = %x\n", cmdReq);
-	std::cout.flush();
-#endif
 
 	//copy the data from the request
 	if(*data_len > DATA_BYTE_IDX)
@@ -127,17 +109,6 @@ ipmi_ret_t ipmiOemBicHandler(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
 	std::memcpy(resp+(SIZE_IANA_ID+respHeader), res->payload.raw.data(), res->payload.size());   
 	*data_len =  SIZE_IANA_ID + res->payload.size() + respHeader;
 
-#ifdef BIC_DEBUG
-        printf(" Data_len :: %d\n", *data_len);
-        printf(" Resp Data :: ");
-        for(i=0; i<*data_len; i++)
-	{
-            printf("%x:", resp[i]);
-        } 
-	
-	printf("\n");
-	std::cout.flush();       
-#endif
         return IPMI_CC_OK;
 }
 
