@@ -16,12 +16,14 @@
  */
 
 #include <ipmid/api.hpp>
+#include <ipmid/api-types.hpp>
 
-#include <iostream>
 #include <commandutils.hpp>
 #include <biccommands.hpp>
 #include <phosphor-logging/log.hpp>
+
 #include <vector>
+#include <iostream>
 
 namespace ipmi
 {
@@ -32,84 +34,76 @@ static void registerBICFunctions() __attribute__((constructor));
 
 extern message::Response::ptr executeIpmiCommand(message::Request::ptr);
 
-
 //----------------------------------------------------------------------
 // ipmiOemBicHandler (IPMI/Section - ) (CMD_OEM_BIC_INFO)
-// This Function will handle BIC request for netfn=0x38 and cmd=1  
+// This Function will handle BIC request for netfn=0x38 and cmd=1
 // send the response back to the sender.
 //----------------------------------------------------------------------
  
-ipmi_ret_t ipmiOemBicHandler(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
-                                ipmi_request_t request,
-                                ipmi_response_t response,
-                                ipmi_data_len_t data_len,
-                                ipmi_context_t context)
+ipmi::RspType<std::vector<uint8_t>> ipmiOemBicHandler(std::vector<uint8_t> inputReq)
 {
-	                          
-	uint8_t *reqData =  reinterpret_cast<uint8_t *>(request);
-        uint8_t *resp = reinterpret_cast<uint8_t *>(response); 
-	
-	uint8_t netfnReq   = 0;
-	uint8_t netfnRes   = 0;
-        uint8_t cmdReq     = 0;
-        int respHeader     = 0;
-	int rqSA           = 0;
-        uint8_t userId     = 0;
-        uint32_t sessionId = 0;
-        uint8_t channel    = 0;
+    uint8_t netfnReq = 0;
+    uint8_t netfnRes = 0;
+    uint8_t cmdReq = 0;
+    uint8_t respHeader = 0;
+    uint8_t rqSA = 0;
+    uint8_t userId = 0;
+    uint32_t sessionId = 0;
+    uint8_t channel = 0;
+    uint8_t dataLen = 0;
 
-        std::vector<uint8_t> data;
-            
-        ipmi::message::Response::ptr res;	
-	boost::asio::io_service io_service;
+    std::vector<uint8_t> data;
+    std::vector<uint8_t> outputRes;
 
-	//Parsing netfn, cmd from the request
- 	netfnReq = reqData[4] >> 2;
-        cmdReq = reqData[5];
+    ipmi::message::Response::ptr res;
+    boost::asio::io_service io_service;
 
-	//copy the data from the request
-	if(*data_len > DATA_BYTE_IDX)
-	{
-            std::copy(&reqData[DATA_BYTE_IDX], &reqData[*data_len], back_inserter(data));
-	}
-	
+    // Get the request data length
+    dataLen = inputReq.size();
 
-	//Boot spwan is used for calling executeipmi command  
-   	boost::asio::spawn(io_service, [&](boost::asio::yield_context yield) {
-	
-        std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
-        auto ctx = std::make_shared<ipmi::Context>(
-            bus, netfnReq, cmdReq, channel, userId, sessionId, ipmi::Privilege::Admin, rqSA, yield);
-        auto req = std::make_shared<ipmi::message::Request>(
-            ctx, std::forward<std::vector<uint8_t>>(data));
+    // Parsing netfn, cmd from the request
+    netfnReq = inputReq.at(NETFN_IDX) >> SHIFT_TWO;
+    cmdReq = inputReq.at(CMD_IDX);
 
-	//Calling executeIpmiCommand request function
-        res = ipmi::executeIpmiCommand(req);
- 
-	});
+    // copy the data from the request
+    if(dataLen > DATA_BYTE_IDX)
+    {
+       std::copy(&inputReq.at(DATA_BYTE_IDX), &inputReq.at(DATA_BYTE_IDX)+(dataLen-DATA_BYTE_IDX), back_inserter(data));
+    }
 
-	// Run the io service
-        io_service.run_one();	
-	
-        *data_len = 0; 
+    // Boot spwan is used for calling executeipmi command
+    boost::asio::spawn(io_service, [&](boost::asio::yield_context yield) {
 
-	//Add 1 to netfn to send the resposne netfn     
-        netfnRes = netfnReq + 1;
+       std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
+       auto ctx = std::make_shared<ipmi::Context>(
+               bus, netfnReq, cmdReq, channel, userId, sessionId,
+               ipmi::Privilege::Admin, rqSA, yield);
+       auto req = std::make_shared<ipmi::message::Request>(
+               ctx, std::forward<std::vector<uint8_t>>(data));
 
-	//copy the IANA 3 bytes and interface 1 bytes to Resp buffer
-	std::memcpy(resp, reqData, SIZE_IANA_ID);
-	resp[SIZE_IANA_ID + respHeader++] = reqData[3];
+       // Calling executeIpmiCommand request function
+       res = ipmi::executeIpmiCommand(req);
+    });
 
-	//copy the netfn, cmd, completion code to Resp buffer	
-        resp[SIZE_IANA_ID + respHeader++] = netfnRes << 2;
-        resp[SIZE_IANA_ID + respHeader++] = cmdReq;
-        resp[SIZE_IANA_ID + respHeader++] = res->cc;
+    // Run the io service
+    io_service.run_one();
 
-	//copy the payload to the Resp buffer
-	std::memcpy(resp+(SIZE_IANA_ID+respHeader), res->payload.raw.data(), res->payload.size());   
-	*data_len =  SIZE_IANA_ID + res->payload.size() + respHeader;
+    // Add 1 to netfn to send the resposne netfn
+    netfnRes = netfnReq + ONE_IDX;
 
-        return IPMI_CC_OK;
+    // copy the IANA 3 bytes and interface 1 bytes to Resp buffer
+    std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX), back_inserter(outputRes));
+    outputRes.push_back(inputReq.at(INTERFACE_IDX));
+
+    // copy the netfn, cmd, completion code to Resp buffer
+    outputRes.push_back(netfnRes << SHIFT_TWO);
+    outputRes.push_back(cmdReq);
+    outputRes.push_back(res->cc);
+
+    // copy the payload to the Resp buffer
+    std::copy(res->payload.raw.data(), res->payload.raw.data() + res->payload.size(), back_inserter(outputRes));
+
+    return ipmi::responseSuccess(outputRes);
 }
 
 static void registerBICFunctions(void)
@@ -118,10 +112,9 @@ static void registerBICFunctions(void)
     phosphor::logging::log<phosphor::logging::level::INFO>(
         "Registering BIC commands");
 
-    //Yv2 BIC command handler for netfn=0x38 cmd=1
-    ipmiPrintAndRegister(NETFUN_FB_OEM_BIC, CMD_OEM_BIC_INFO, NULL,
-                          ipmiOemBicHandler,
-                         PRIVILEGE_USER);
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+                          cmdOemBicInfo, ipmi::Privilege::User,
+                          ipmiOemBicHandler);
     return;
 } 
 

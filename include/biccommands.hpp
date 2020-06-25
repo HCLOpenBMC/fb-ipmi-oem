@@ -1,13 +1,17 @@
 
-#define NETFUN_FB_OEM_BIC 0x38
 #define SIZE_IANA_ID 3
 #define DATA_BYTE_IDX 6
 
-//Added for debug prints
-#define BIC_DEBUG
+#define INTERFACE_IDX 3
+#define NETFN_IDX 4
+#define CMD_IDX 5
+#define SHIFT_TWO 2
 
-enum fb_oem_bic
-{
-	CMD_OEM_BIC_INFO = 0x1
-};
+#define ZERO_IDX 0
+#define ONE_IDX 1
+
+// IPMI Command for a Net Function number as specified by IPMI V2.0 spec.
+using Cmd = uint8_t;
+
+constexpr Cmd cmdOemBicInfo =  0x01;
 
