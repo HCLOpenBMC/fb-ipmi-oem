@@ -14,4 +14,5 @@
 using Cmd = uint8_t;
 
 constexpr Cmd cmdOemBicInfo =  0x01;
+constexpr Cmd cmdOemSendInterrupteToBMC =  0x07;
 

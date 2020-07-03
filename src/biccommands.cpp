@@ -106,6 +106,27 @@ ipmi::RspType<std::vector<uint8_t>> ipmiOemBicHandler(std::vector<uint8_t> input
     return ipmi::responseSuccess(outputRes);
 }
 
+
+//----------------------------------------------------------------------
+// ipmiOemBicInterruptHandler (IPMI/Section - ) (CMD_OEM_BIC_INTERRUPT_INFO)
+// This Function will handle BIC request for netfn=0x38 and cmd=6
+// send the response back to the sender.
+//----------------------------------------------------------------------
+ 
+ipmi::RspType<std::vector<uint8_t>> ipmiOemBicInterruptHandler(std::vector<uint8_t> inputReq)
+{
+
+
+    std::vector<uint8_t> data;
+    std::vector<uint8_t> outputRes;
+    std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX), back_inserter(outputRes));
+
+	
+	std::cerr<<"Received Interrupt..\n"<<std::flush;
+	return ipmi::responseSuccess(outputRes);
+}
+
+
 static void registerBICFunctions(void)
 {
 
@@ -115,6 +136,9 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+                          cmdOemSendInterrupteToBMC, ipmi::Privilege::User,
+                          ipmiOemBicInterruptHandler);
     return;
 } 
 
