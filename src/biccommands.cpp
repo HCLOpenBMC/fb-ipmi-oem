@@ -116,14 +116,32 @@ ipmi::RspType<std::vector<uint8_t>> ipmiOemBicHandler(std::vector<uint8_t> input
 ipmi::RspType<std::vector<uint8_t>> ipmiOemBicInterruptHandler(std::vector<uint8_t> inputReq)
 {
 
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "Registering BIC commands  - ipmiOemBicInterruptHandler ");
 
-    std::vector<uint8_t> data;
     std::vector<uint8_t> outputRes;
+
+    printf("Input request :");
+    for(int i=0; i<inputReq.size(); i++)
+    {
+        printf("%x:", inputReq[i]);
+    }
+    std::cout<<"\n";
+    std::cout.flush();
+
     std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX), back_inserter(outputRes));
 
-	
-	std::cerr<<"Received Interrupt..\n"<<std::flush;
-	return ipmi::responseSuccess(outputRes);
+    printf("Output Resp :");
+    for(int i=0; i<outputRes.size(); i++)
+    {
+        printf("%x:", outputRes[i]);
+    }
+    std::cout<<"\n";
+    std::cout.flush();
+
+
+    std::cerr<<"Received Interrupt..\n"<<std::flush;
+    return ipmi::responseSuccess(outputRes);
 }
 
 
