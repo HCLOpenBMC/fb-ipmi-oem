@@ -129,6 +129,18 @@ ipmi::RspType<std::vector<uint8_t>> ipmiOemBicInterruptHandler(std::vector<uint8
     std::cout<<"\n";
     std::cout.flush();
 
+    std::shared_ptr<sdbusplus::asio::connection> conn = getSdBus();
+
+    auto method = conn->new_method_call("xyz.openbmc_project.Misc.Ipmi","/xyz/openbmc_project/misc/ipmi",
+                                        "xyz.openbmc_project.Misc.Ipmi", "updatePGood1");
+    method.append(30);
+    auto reply = conn->call(method);
+    if (reply.is_method_error())
+    {
+    phosphor::logging::log<phosphor::logging::level::ERR>(
+        "Error calling method updatePGood1");
+    }
+
     std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX), back_inserter(outputRes));
 
     printf("Output Resp :");
