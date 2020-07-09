@@ -109,7 +109,7 @@ ipmi::RspType<std::vector<uint8_t>> ipmiOemBicHandler(std::vector<uint8_t> input
 
 //----------------------------------------------------------------------
 // ipmiOemBicInterruptHandler (IPMI/Section - ) (CMD_OEM_BIC_INTERRUPT_INFO)
-// This Function will handle BIC request for netfn=0x38 and cmd=6
+// This Function will handle BIC request for netfn=0x38 and cmd=7
 // send the response back to the sender.
 //----------------------------------------------------------------------
  
@@ -144,6 +144,41 @@ ipmi::RspType<std::vector<uint8_t>> ipmiOemBicInterruptHandler(std::vector<uint8
     return ipmi::responseSuccess(outputRes);
 }
 
+//----------------------------------------------------------------------
+// ipmiOemBicInterruptHandler (IPMI/Section - ) (CMD_OEM_BIC_POST_BUFFER_INFO)
+// This Function will handle BIC request for netfn=0x38 and cmd=8
+// send the response back to the sender.
+//----------------------------------------------------------------------
+ 
+ipmi::RspType<std::vector<uint8_t>> ipmiOemPostBufferHandler(std::vector<uint8_t> inputReq)
+{
+
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "Registering BIC commands  - ipmiOemPostBufferHandler ");
+
+    std::vector<uint8_t> outputRes;
+
+    printf("Input request :");
+    for(int i=0; i<inputReq.size(); i++)
+    {
+        printf("%x:", inputReq[i]);
+    }
+    std::cout<<"\n";
+    std::cout.flush();
+
+    std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX), back_inserter(outputRes));
+
+    printf("Output Resp :");
+    for(int i=0; i<outputRes.size(); i++)
+    {
+        printf("%x:", outputRes[i]);
+    }
+    std::cout<<"\n";
+    std::cout.flush();
+
+
+    return ipmi::responseSuccess(outputRes);
+}
 
 static void registerBICFunctions(void)
 {
@@ -157,6 +192,9 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemSendInterrupteToBMC, ipmi::Privilege::User,
                           ipmiOemBicInterruptHandler);
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
+                          ipmiOemPostBufferHandler);
     return;
 } 
 
