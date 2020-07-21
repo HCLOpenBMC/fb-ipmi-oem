@@ -105,7 +105,68 @@ ipmi::RspType<std::vector<uint8_t>> ipmiOemBicHandler(std::vector<uint8_t> input
 
     return ipmi::responseSuccess(outputRes);
 }
+//----------------------------------------------------------------------
+// ipmiOemPostBufferHandler (IPMI/Section - ) (CMD_OEM_BIC_POST_BUFFER_INFO)
+// This Function will handle BIC incomming postcode from multi-host for netfn=0x38 and cmd=0x08
+// send the response back to the sender.
+//----------------------------------------------------------------------
 
+ipmi::RspType<std::vector<uint8_t>>
+    ipmiOemPostBufferHandler(std::vector<uint8_t> inputReq)
+{
+
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "Registering BIC commands  - ipmiOemPostBufferHandler ");
+
+    std::vector<uint8_t> outputRes;
+
+    printf("Postcode_new Input request :");
+    for (int i = 0; i < inputReq.size(); i++)
+    {
+        printf("0x%x:", inputReq[i]);
+    }
+    std::cout << "\n";
+    std::cout.flush();
+
+    uint8_t* postcode = inputReq.data();
+
+    try
+    {
+
+        std::shared_ptr<sdbusplus::asio::connection> conn = getSdBus();
+
+        auto method = conn->new_method_call(
+            "xyz.openbmc_project.State.Boot.Raw",
+            "/xyz/openbmc_project/state/boot/raw",
+            "xyz.openbmc_project.State.Boot.Raw", "readPostcode");
+
+        printf("postcode: 0x%x\n", postcode[4]);
+
+        method.append(postcode[4]);
+
+        auto reply = conn->call(method);
+        if (reply.is_method_error())
+        {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error calling method readPostcode");
+        }
+
+        std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX),
+                  back_inserter(outputRes));
+
+        printf("Postcode22 Output Resp :");
+        for (int i = 0; i < outputRes.size(); i++)
+        {
+            printf("0x%x:", outputRes[i]);
+        }
+        std::cout << "\n";
+        std::cout.flush();
+    }
+    catch (std::exception&)
+    {}
+
+    return ipmi::responseSuccess(outputRes);
+}
 static void registerBICFunctions(void)
 {
 
@@ -115,6 +176,9 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
+                          ipmiOemPostBufferHandler);
     return;
 } 
 
