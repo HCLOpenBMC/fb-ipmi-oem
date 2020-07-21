@@ -60,6 +60,13 @@ endif ()
 
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+SET(tempVar "")
+
+if(YMACHINE STREQUAL "yosemitev2")
+   SET(tempVar "src/biccommands.cpp")
+endif()
+
+
 add_library (zfboemcmds
              SHARED src/oemcommands.cpp src/appcommands.cpp
              src/storagecommands.cpp src/usb-dbg.cpp
