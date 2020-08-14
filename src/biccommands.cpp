@@ -39,71 +39,27 @@ extern message::Response::ptr executeIpmiCommand(message::Request::ptr);
 // This Function will handle BIC request for netfn=0x38 and cmd=1
 // send the response back to the sender.
 //----------------------------------------------------------------------
- 
-ipmi::RspType<std::vector<uint8_t>> ipmiOemBicHandler(std::vector<uint8_t> inputReq)
-{
-    uint8_t netfnReq = 0;
-    uint8_t netfnRes = 0;
-    uint8_t cmdReq = 0;
-    uint8_t respHeader = 0;
-    uint8_t rqSA = 0;
-    uint8_t userId = 0;
-    uint32_t sessionId = 0;
-    uint8_t channel = 0;
-    uint8_t dataLen = 0;
 
-    std::vector<uint8_t> data;
-    std::vector<uint8_t> outputRes;
+ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t, uint8_t, ipmi::message::Payload>
+    ipmiOemBicHandler(ipmi::Context::ptr ctx, std::array<uint8_t, 3> iana, uint8_t interface,
+                      uint2_t lun, uint6_t netFnReq, uint8_t cmdReq, std::vector<uint8_t> data)
+{
 
     ipmi::message::Response::ptr res;
-    boost::asio::io_service io_service;
 
-    // Get the request data length
-    dataLen = inputReq.size();
+    // Updating the correct netfn and cmd in the ipmi Context
+    ctx->netFn = ((uint8_t)netFnReq);
+    ctx->cmd = cmdReq;
+    
+    // creating ipmi message request for calling executeIpmiCommand function
+    auto req = std::make_shared<ipmi::message::Request>(
+            ctx, std::forward<std::vector<uint8_t>>(data));
 
-    // Parsing netfn, cmd from the request
-    netfnReq = inputReq.at(NETFN_IDX) >> SHIFT_TWO;
-    cmdReq = inputReq.at(CMD_IDX);
+    // Calling executeIpmiCommand request function
+    res = ipmi::executeIpmiCommand(req);
 
-    // copy the data from the request
-    if(dataLen > DATA_BYTE_IDX)
-    {
-       std::copy(&inputReq.at(DATA_BYTE_IDX), &inputReq.at(DATA_BYTE_IDX)+(dataLen-DATA_BYTE_IDX), back_inserter(data));
-    }
-
-    // Boot spwan is used for calling executeipmi command
-    boost::asio::spawn(io_service, [&](boost::asio::yield_context yield) {
-
-       std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
-       auto ctx = std::make_shared<ipmi::Context>(
-               bus, netfnReq, cmdReq, channel, userId, sessionId,
-               ipmi::Privilege::Admin, rqSA, yield);
-       auto req = std::make_shared<ipmi::message::Request>(
-               ctx, std::forward<std::vector<uint8_t>>(data));
-
-       // Calling executeIpmiCommand request function
-       res = ipmi::executeIpmiCommand(req);
-    });
-
-    // Run the io service
-    io_service.run_one();
-
-    // Add 1 to netfn to send the resposne netfn
-    netfnRes = netfnReq + ONE_IDX;
-
-    // copy the IANA 3 bytes and interface 1 bytes to Resp buffer
-    std::copy(&inputReq.at(ZERO_IDX), &inputReq.at(INTERFACE_IDX), back_inserter(outputRes));
-    outputRes.push_back(inputReq.at(INTERFACE_IDX));
-
-    // copy the netfn, cmd, completion code to Resp buffer
-    outputRes.push_back(netfnRes << SHIFT_TWO);
-    outputRes.push_back(cmdReq);
-    outputRes.push_back(res->cc);
-
-    // copy the payload to the Resp buffer
-    std::copy(res->payload.raw.data(), res->payload.raw.data() + res->payload.size(), back_inserter(outputRes));
-
-    return ipmi::responseSuccess(outputRes);
+    // sending the response with headers and payload 
+    return ipmi::responseSuccess(iana, interface, lun, ++netFnReq, cmdReq, res->cc, res->payload);
 }
 
 static void registerBICFunctions(void)
@@ -116,6 +72,6 @@ static void registerBICFunctions(void)
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
     return;
-} 
+}
 
 } // namespace ipmi
