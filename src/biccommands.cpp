@@ -40,9 +40,11 @@ extern message::Response::ptr executeIpmiCommand(message::Request::ptr);
 // send the response back to the sender.
 //----------------------------------------------------------------------
 
-ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t, uint8_t, ipmi::message::Payload>
-    ipmiOemBicHandler(ipmi::Context::ptr ctx, std::array<uint8_t, 3> iana, uint8_t interface,
-                      uint2_t lun, uint6_t netFnReq, uint8_t cmdReq, std::vector<uint8_t> data)
+ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
+              uint8_t, ipmi::message::Payload>
+    ipmiOemBicHandler(ipmi::Context::ptr ctx, std::array<uint8_t, 3> iana,
+                      uint8_t interface, uint2_t lun, uint6_t netFnReq,
+                      uint8_t cmdReq, std::vector<uint8_t> data)
 {
 
     ipmi::message::Response::ptr res;
@@ -50,17 +52,55 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t, uint8_
     // Updating the correct netfn and cmd in the ipmi Context
     ctx->netFn = ((uint8_t)netFnReq);
     ctx->cmd = cmdReq;
-    
+
     // creating ipmi message request for calling executeIpmiCommand function
     auto req = std::make_shared<ipmi::message::Request>(
-            ctx, std::forward<std::vector<uint8_t>>(data));
+        ctx, std::forward<std::vector<uint8_t>>(data));
 
     // Calling executeIpmiCommand request function
     res = ipmi::executeIpmiCommand(req);
 
-    // sending the response with headers and payload 
-    return ipmi::responseSuccess(iana, interface, lun, ++netFnReq, cmdReq, res->cc, res->payload);
+    // sending the response with headers and payload
+    return ipmi::responseSuccess(iana, interface, lun, ++netFnReq, cmdReq,
+                                 res->cc, res->payload);
 }
+
+
+//----------------------------------------------------------------------
+// ipmiOemPostBufferHandler (IPMI/Section - ) (CMD_OEM_BIC_POST_BUFFER_INFO)
+// This Function will handle BIC incomming postcode from multi-host for netfn=0x38 and cmd=0x08
+// send the response back to the sender.
+//----------------------------------------------------------------------
+
+ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
+    ipmiOemPostBufferHandler(ipmi::Context::ptr ctx, std::array<uint8_t, 3> iana, 
+                             uint8_t interface, std::vector<uint8_t> data)
+{
+    printf("Postcode host num = %d\n", ctx->channelIdx);
+
+    std::shared_ptr<sdbusplus::asio::connection> conn = getSdBus();
+
+    auto method = conn->new_method_call(
+        "xyz.openbmc_project.State.Boot.Raw",
+        "/xyz/openbmc_project/state/boot/raw1",
+        "xyz.openbmc_project.State.Boot.Raw", "readPostcode");
+
+    printf("postcode: 0x%x\n", data.at(0));
+    std::cout.flush();
+
+    method.append(static_cast<uint16_t>(data.at(0)), static_cast<uint16_t>(ctx->channelIdx));
+
+    auto reply = conn->call(method);
+    if (reply.is_method_error())
+    {
+            phosphor::logging::log<phosphor::logging::level::ERR>(
+                "Error calling method readPostcode");
+    
+    }
+    
+    return ipmi::responseSuccess(iana, interface);
+}
+
 
 static void registerBICFunctions(void)
 {
@@ -71,6 +111,11 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
+
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
+                          ipmiOemPostBufferHandler); 
+
     return;
 }
 
