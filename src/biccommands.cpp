@@ -73,31 +73,30 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
 //----------------------------------------------------------------------
 
 ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
-    ipmiOemPostBufferHandler(ipmi::Context::ptr ctx, std::array<uint8_t, 3> iana, 
+    ipmiOemPostBufferHandler(ipmi::Context::ptr ctx, std::array<uint8_t, 3> iana,
                              uint8_t interface, std::vector<uint8_t> data)
 {
-    printf("Postcode host num = %d\n", ctx->channelIdx);
-
+    // creating bus connection
     std::shared_ptr<sdbusplus::asio::connection> conn = getSdBus();
 
+    // creating method call to readPostcode from postd process
     auto method = conn->new_method_call(
         "xyz.openbmc_project.State.Boot.Raw",
         "/xyz/openbmc_project/state/boot/raw1",
         "xyz.openbmc_project.State.Boot.Raw", "readPostcode");
 
-    printf("postcode: 0x%x\n", data.at(0));
-    std::cout.flush();
-
+    // Adding paramters to method call
     method.append(static_cast<uint16_t>(data.at(0)), static_cast<uint16_t>(ctx->channelIdx));
 
+    // calling method call function
     auto reply = conn->call(method);
     if (reply.is_method_error())
     {
             phosphor::logging::log<phosphor::logging::level::ERR>(
                 "Error calling method readPostcode");
-    
     }
-    
+
+    // sending the response with headers
     return ipmi::responseSuccess(iana, interface);
 }
 
@@ -114,7 +113,7 @@ static void registerBICFunctions(void)
 
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
-                          ipmiOemPostBufferHandler); 
+                          ipmiOemPostBufferHandler);
 
     return;
 }
