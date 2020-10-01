@@ -25,6 +25,8 @@
 #include <nlohmann/json.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/message/types.hpp>
+#include <sdbusplus/asio/connection.hpp>
+#include <ipmid/api.hpp>
 
 #include <fstream>
 #include <iomanip>
@@ -45,6 +47,9 @@ static constexpr const char* FRU_EEPROM = "/sys/bus/i2c/devices/6-0054/eeprom";
 static uint8_t globEna = 0x09;
 static SysInfoParam sysInfoParams;
 nlohmann::json appData __attribute__((init_priority(101)));
+
+using IpmbMethodType =
+    std::tuple<int, uint8_t, uint8_t, uint8_t, uint8_t, std::vector<uint8_t>>;
 
 void printGUID(uint8_t* guid, off_t offset)
 {
@@ -260,8 +265,154 @@ static int platGetSysFWVer(uint8_t* ver)
     len = str.length();
     *ver++ = len;
     memcpy(ver, str.data(), len);
+    printf("Len : %d ver : %d \n",len,*ver);
 
     return (len + 3);
+}
+
+static std::vector<uint8_t> oem(uint8_t* res)
+{
+    std::cerr << "OEM" << "\n";
+    printf("%d \n",*res);
+    std::cout.flush();
+
+//    *res++ = 0; // byte 1: Set selector not supported
+//    *res++ = 0; // byte 2: Only ASCII supported
+
+    uint8_t netFn = 0x38;
+    uint8_t cmd = 0x0b;
+    uint8_t lun = 0;
+    uint8_t host = 0;
+    std::vector<uint8_t> me{0x15, 0xa0, 0, 3};
+    std::vector<uint8_t> cpld{0x15, 0xa0, 0, 1};
+    std::vector<uint8_t> bridgeIC{0x15, 0xa0, 0, 2};
+
+
+    auto bus = getSdBus();
+//    std::shared_ptr<sdbusplus::asio::connection> bus = getSdBus();
+
+    auto method = bus->new_method_call("xyz.openbmc_project.Ipmi.Channel.Ipmb",
+                                       "/xyz/openbmc_project/Ipmi/Channel/Ipmb",
+                                       "org.openbmc.Ipmb", "sendRequest");
+
+    std::cerr << "ME version" << "\n";
+
+    method.append(host, netFn, lun, cmd, me);
+
+    auto reply = bus->call(method);
+    if (reply.is_method_error())
+    {
+        std::cerr << "Error reading from ME\n";
+//        return -1;
+    }
+
+    IpmbMethodType resp;
+    reply.read(resp);
+
+/*    uint8_t a = std::get<0>(resp);
+    uint8_t b = std::get<1>(resp);
+    uint8_t c = std::get<2>(resp);
+    uint8_t d = std::get<3>(resp);
+    uint8_t e = std::get<4>(resp);
+
+    printf("\n Response : %d : %d : %d : %d : %d \n",a,b,c,d,e);
+    std::cout.flush();
+*/
+    std::vector<uint8_t> data;
+    data = std::get<5>(resp);
+
+    for(int i=0; i<data.size(); i++)
+    {
+       printf(" : %d ", data.at(i));
+       std::cout.flush();
+    }
+
+    int len = data.size();
+//    *res++ = len;
+    memcpy(res, data.data(), len);
+    std::cerr << "\n OEM Versions \n ";
+    return data;
+
+//  CPLD
+
+/*    std::cerr << "\n CPLD version" << "\n";
+
+    auto method1 = bus->new_method_call("xyz.openbmc_project.Ipmi.Channel.Ipmb",
+                                       "/xyz/openbmc_project/Ipmi/Channel/Ipmb",
+                                       "org.openbmc.Ipmb", "sendRequest");
+    method1.append(host, netFn, lun, cmd, cpld);
+
+    auto reply1 = bus->call(method1);
+    if (reply1.is_method_error())
+    {
+        std::cerr << "Error reading from CPLD\n";
+//        return -1;
+    }
+
+    IpmbMethodType resp1;
+    reply1.read(resp1);
+
+    uint8_t data1 = std::get<0>(resp1);
+    uint8_t data2 = std::get<1>(resp1);
+    uint8_t data3 = std::get<2>(resp1);
+    uint8_t data4 = std::get<3>(resp1);
+    uint8_t data5 = std::get<4>(resp1);
+
+    printf("Response : %d : %d : %d : %d : %d \n",data1,data2,data3,data4,data5);
+    std::cout.flush();
+
+    std::vector<uint8_t> data0;
+    data0 = std::get<5>(resp1);
+
+    for(int i=0; i<data0.size(); i++)
+    {
+       printf(" : %d ", data0.at(i));
+       std::cout.flush();
+    }
+
+//  BridgeIC
+
+    std::cerr << "\n Bridge IC Version" << "\n";
+
+    auto method2 = bus->new_method_call("xyz.openbmc_project.Ipmi.Channel.Ipmb",
+                                       "/xyz/openbmc_project/Ipmi/Channel/Ipmb",
+                                       "org.openbmc.Ipmb", "sendRequest");
+    method2.append(host, netFn, lun, cmd, bridgeIC);
+
+    auto reply2 = bus->call(method2);
+    if (reply2.is_method_error())
+    {
+        std::cerr << "Error reading from Bridge IC \n";
+//        return -1;
+    }
+
+    IpmbMethodType resp2;
+    reply2.read(resp2);
+
+    uint8_t d1 = std::get<0>(resp2);
+    uint8_t d2 = std::get<1>(resp2);
+    uint8_t d3 = std::get<2>(resp2);
+    uint8_t d4 = std::get<3>(resp2);
+    uint8_t d5 = std::get<4>(resp2);
+
+    printf("Response : %d : %d : %d : %d : %d \n",d1,d2,d3,d4,d5);
+    std::cout.flush();
+
+    std::vector<uint8_t> d0;
+    d0 = std::get<5>(resp2);
+
+    std::cerr << "\n Version \n";
+
+    for(int i=0; i<d0.size(); i++)
+    {
+       printf(" : %d ", d0.at(i));
+       std::cout.flush();
+    }
+    
+    std::cerr << "\n Firmware Version \n";
+
+    return d0;
+*/
 }
 
 //----------------------------------------------------------------------
@@ -352,12 +503,17 @@ ipmi_ret_t ipmiAppGetSysInfoParams(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
 
     uint8_t param = req[1];
     uint8_t len;
-
+    std::vector<uint8_t> v;
     *res++ = 1; // Parameter revision
     *data_len = 1;
 
     switch (param)
     {
+        case SYS_INFO_PARAM_OEM:
+            std::cerr << "\n SYS_INFO_PARAM_OEM" << "\n";
+            v = oem(res);
+//            *res++ = v;
+            *data_len += SIZE_OEM;
         case SYS_INFO_PARAM_SET_IN_PROG:
             *res++ = sysInfoParams.set_in_prog;
             *data_len += 1;

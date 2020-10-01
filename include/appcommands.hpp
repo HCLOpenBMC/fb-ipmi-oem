@@ -32,6 +32,7 @@ enum fb_app_cmds
 
 };
 
+#define SIZE_OEM 17 
 #define SIZE_SYSFW_VER 17
 #define SIZE_SYS_NAME 17
 #define SIZE_OS_NAME 17
@@ -63,6 +64,7 @@ enum SysInfoParams
     SYS_INFO_PARAM_BIOS_FIXED_BOOT_DEVICE = 0xC2,
     SYS_INFO_PARAM_BIOS_RSTR_DFLT_SETTING = 0xC3,
     SYS_INFO_PARAM_LAST_BOOT_TIME = 0xC4,
+    SYS_INFO_PARAM_OEM = 0xC0,
 };
 
 // Structure for System Info Params (IPMI/Section 22.14a)
