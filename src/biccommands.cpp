@@ -78,14 +78,20 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
                              std::vector<uint8_t> data)
 {
     // creating bus connection
-    std::shared_ptr<sdbusplus::asio::connection> conn = getSdBus();
+    auto conn = getSdBus();
 
     // storing post code as varaint
     std::variant<uint64_t> postCode = static_cast<uint64_t>(data.at(0));
 
+    printf("Postcode : %d\n", postCode);
+    printf("Channel Idx : %d\n", ctx->hostIdx);
+    std::cout.flush();
+
     // creating dbus objects for 1 to N process
-    std::string dbusObj = "/xyz/openbmc_project/state/boot/raw" +
-                          std::to_string((ctx->channelIdx + 1));
+    const std::string dbusObj = "/xyz/openbmc_project/state/boot/raw" +
+                          std::to_string((ctx->hostIdx + 1));
+
+    const std::string dbusService = "xyz.openbmc_project.State.Boot.Raw";
 
     // creating method call to update postd value
     auto method = conn->new_method_call(
@@ -93,7 +99,7 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
         "org.freedesktop.DBus.Properties", "Set");
 
     // Adding paramters to method call
-    method.append("xyz.openbmc_project.State.Boot.Raw", "Value", postCode);
+    method.append(dbusService, "Value", postCode);
 
     // Invoke method call function
     auto reply = conn->call(method);
@@ -102,6 +108,7 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
         phosphor::logging::log<phosphor::logging::level::ERR>(
             "Error in set Value of postd Raw interface");
     }
+
 
     // sending the response with headers
     return ipmi::responseSuccess(iana, interface);
