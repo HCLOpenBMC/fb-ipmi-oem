@@ -48,6 +48,35 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
                       uint8_t cmdReq, std::vector<uint8_t> data)
 {
 
+    std::cerr << "\n ...... Inside bic .......\n";
+    std::cout.flush();
+
+    printf("CTX : %x \n",ctx->channelIdx);
+    std::cout.flush();
+    printf("IANA[0] : %x \n",iana[0]);
+    std::cout.flush();
+    printf("IANA[1] : %x \n",iana[1]);
+    std::cout.flush();
+    printf("IANA : %x \n",iana[2]);
+    std::cout.flush();
+    printf("Interface : %d \n",interface);
+    std::cout.flush();
+    printf("LUN : %x \n",lun);
+    std::cout.flush();
+    printf("NETFN : %x \n",netFnReq);
+    std::cout.flush();
+    printf("CMD : %d \n",cmdReq);
+    std::cout.flush();
+
+    std::cerr << " DATA : ";
+    std::cout.flush();
+
+    for(int i=0; i<data.size(); i++)
+    {
+       printf(" : %x ", data.at(i));
+       std::cout.flush();
+    }
+
     ipmi::message::Response::ptr res;
 
     // Updating the correct netfn and cmd in the ipmi Context
