@@ -47,36 +47,6 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
                       uint8_t interface, uint2_t lun, uint6_t netFnReq,
                       uint8_t cmdReq, std::vector<uint8_t> data)
 {
-
-    std::cerr << "\n ...... Inside bic .......\n";
-    std::cout.flush();
-
-    printf("CTX : %x \n",ctx->channelIdx);
-    std::cout.flush();
-    printf("IANA[0] : %x \n",iana[0]);
-    std::cout.flush();
-    printf("IANA[1] : %x \n",iana[1]);
-    std::cout.flush();
-    printf("IANA : %x \n",iana[2]);
-    std::cout.flush();
-    printf("Interface : %d \n",interface);
-    std::cout.flush();
-    printf("LUN : %x \n",lun);
-    std::cout.flush();
-    printf("NETFN : %x \n",netFnReq);
-    std::cout.flush();
-    printf("CMD : %d \n",cmdReq);
-    std::cout.flush();
-
-    std::cerr << " DATA : ";
-    std::cout.flush();
-
-    for(int i=0; i<data.size(); i++)
-    {
-       printf(" : %x ", data.at(i));
-       std::cout.flush();
-    }
-
     ipmi::message::Response::ptr res;
 
     // Updating the correct netfn and cmd in the ipmi Context
@@ -100,7 +70,7 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
 // This Function will handle BIC incomming postcode from multi-host for
 // netfn=0x38 and cmd=0x08 send the response back to the sender.
 //----------------------------------------------------------------------
-
+#if 0
 ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
     ipmiOemPostBufferHandler(ipmi::Context::ptr ctx,
                              std::array<uint8_t, 3> iana, uint8_t interface,
@@ -142,7 +112,7 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
     // sending the response with headers
     return ipmi::responseSuccess(iana, interface);
 }
-
+#endif
 static void registerBICFunctions(void)
 {
 
@@ -152,9 +122,9 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
-    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
-                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
-                          ipmiOemPostBufferHandler);
+//    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+//                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
+//                          ipmiOemPostBufferHandler);
     return;
 }
 

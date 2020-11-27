@@ -71,9 +71,10 @@ add_library (zfboemcmds
              src/storagecommands.cpp src/usb-dbg.cpp
              src/selcommands.cpp src/transportcommands.cpp ${bicFile})
 
-message(" HOST : ${HOST}")
 if(HOST)
    add_definitions (-DINSTANCES="${HOST}")
+else()
+   add_definitions (-DINSTANCES="0")
 endif()
 
 set_target_properties (zfboemcmds PROPERTIES VERSION "0.1.0")
