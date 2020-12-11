@@ -70,7 +70,6 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
 // This Function will handle BIC incomming postcode from multi-host for
 // netfn=0x38 and cmd=0x08 send the response back to the sender.
 //----------------------------------------------------------------------
-#if 0
 ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
     ipmiOemPostCodeHandler(ipmi::Context::ptr ctx,
                              std::array<uint8_t, 3> iana, uint8_t interface,
@@ -120,7 +119,7 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
     // sending the response with headers
     return ipmi::responseSuccess(iana, interface);
 }
-#endif
+
 static void registerBICFunctions(void)
 {
 
@@ -130,15 +129,10 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
-<<<<<<< HEAD
+
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
                           ipmiOemPostCodeHandler);
-=======
-//    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
-//                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
-//                          ipmiOemPostBufferHandler);
->>>>>>> 493da6fa6a6d3ba4900b7d74057ea734b8659402
     return;
 }
 
