@@ -1103,7 +1103,8 @@ static void parseOemUnifiedSel(NtsOemSELEntry* data, std::string& errStr)
     return;
 }
 
-static void parseSelData(std::vector<uint8_t>& reqData, std::string& msgLog)
+static void parseSelData(uint8_t fruId, std::vector<uint8_t>& reqData,
+                         std::string& msgLog)
 {
 
     /* Get record type */
@@ -1116,7 +1117,7 @@ static void parseSelData(std::vector<uint8_t>& reqData, std::string& msgLog)
     recTypeStream << std::hex << std::uppercase << std::setfill('0')
                   << std::setw(2) << recType;
 
-    msgLog = "SEL Entry: FRU: 1, Record: ";
+    msgLog = "SEL Entry: FRU:" + std::to_string(fruId) + ", Record:";
 
     if (recType == stdErrType)
     {
@@ -1219,6 +1220,9 @@ static void parseSelData(std::vector<uint8_t>& reqData, std::string& msgLog)
 namespace ipmi
 {
 
+int sendBicCmd(uint8_t, uint8_t, uint8_t, std::vector<uint8_t>&,
+               std::vector<uint8_t>&);
+
 namespace storage
 {
 
@@ -1231,19 +1235,50 @@ ipmi::RspType<uint8_t,  // SEL version
               uint32_t, // last add timestamp
               uint32_t, // last erase timestamp
               uint8_t>  // operation support
-    ipmiStorageGetSELInfo()
+    ipmiStorageGetSELInfo(ipmi::Context::ptr ctx)
 {
 
     fb_oem::ipmi::sel::GetSELInfoData info;
 
+#if BIC_ENABLED
+
+    std::vector<uint8_t> respData;
+    std::vector<uint8_t> reqData;
+
+    uint8_t bicAddr = (uint8_t)ctx->hostIdx << 2;
+
+    if (sendBicCmd(ctx->netFn, ctx->cmd, bicAddr, reqData, respData))
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    fb_oem::ipmi::sel::GetSELInfoDataOem* selInfo =
+        reinterpret_cast<fb_oem::ipmi::sel::GetSELInfoDataOem*>(&respData[0]);
+
+    if (respData.size() == 0)
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    info.selVersion = selInfo->selVersion;
+    info.entries = selInfo->entries;
+    info.addTimeStamp = selInfo->addTimeStamp;
+    info.eraseTimeStamp = selInfo->eraseTimeStamp;
+    info.operationSupport = selInfo->operationSupport;
+
+#else
+
     selObj.getInfo(info);
+
+#endif
+
     return ipmi::responseSuccess(info.selVersion, info.entries, info.freeSpace,
                                  info.addTimeStamp, info.eraseTimeStamp,
                                  info.operationSupport);
 }
 
-ipmi::RspType<uint16_t, std::vector<uint8_t>>
-    ipmiStorageGetSELEntry(std::vector<uint8_t> data)
+ipmi::RspType<std::vector<uint8_t>>
+    ipmiStorageGetSELEntry(ipmi::Context::ptr ctx, std::vector<uint8_t> data)
 {
 
     if (data.size() != sizeof(fb_oem::ipmi::sel::GetSELEntryRequest))
@@ -1262,7 +1297,25 @@ ipmi::RspType<uint16_t, std::vector<uint8_t>>
         }
     }
 
-    uint16_t selCnt = selObj.getCount();
+    std::vector<uint8_t> recDataBytes;
+
+#if BIC_ENABLED
+
+    uint8_t bicAddr = (uint8_t)ctx->hostIdx << 2;
+
+    if (sendBicCmd(ctx->netFn, ctx->cmd, bicAddr, data, recDataBytes))
+    {
+
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(recDataBytes);
+
+#else
+
+    uint16_t selCnt =
+        selObj.getCount(); // How to read specific sel count of host BIC
+
     if (selCnt == 0)
     {
         return ipmi::responseSensorInvalid();
@@ -1287,7 +1340,6 @@ ipmi::RspType<uint16_t, std::vector<uint8_t>>
         return ipmi::responseSensorInvalid();
     }
 
-    std::vector<uint8_t> recDataBytes;
     if (fromHexStr(ipmiRaw, recDataBytes) < 0)
     {
         return ipmi::responseUnspecifiedError();
@@ -1329,9 +1381,11 @@ ipmi::RspType<uint16_t, std::vector<uint8_t>>
         }
         return ipmi::responseSuccess(nextRecord, recPartData);
     }
+#endif
 }
 
-ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(std::vector<uint8_t> data)
+ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(ipmi::Context::ptr ctx,
+                                               std::vector<uint8_t> data)
 {
     /* Per the IPMI spec, need to cancel any reservation when a
      * SEL entry is added
@@ -1343,7 +1397,31 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(std::vector<uint8_t> data)
         return ipmi::responseReqDataLenInvalid();
     }
 
+    int responseID = 0;
     std::string ipmiRaw, logErr;
+
+#if BIC_ENABLED
+
+    std::vector<uint8_t> respData;
+
+    uint8_t bicAddr = (uint8_t)ctx->hostIdx << 2;
+
+    data.insert(data.begin(), data.size());
+
+    if (sendBicCmd(ctx->netFn, ctx->cmd, bicAddr, reqData, respData))
+    {
+        return ipmi::responseUnspecifiedError();
+    }
+
+    responseID = (respData[1] << 8 | respData[0]);
+
+    toHexStr(data, ipmiRaw);
+
+    /* Parse sel data and get an error log to be filed */
+    fb_oem::ipmi::sel::parseSelData((ctx->hostIdx + 1), data, logErr);
+
+#else
+
     toHexStr(data, ipmiRaw);
 
     /* Parse sel data and get an error log to be filed */
@@ -1361,27 +1439,53 @@ ipmi::RspType<uint16_t> ipmiStorageAddSELEntry(std::vector<uint8_t> data)
         phosphor::logging::entry("IPMISEL_MESSAGE_ID=%s", messageID.c_str()),
         phosphor::logging::entry("IPMISEL_MESSAGE_ARGS=%s", logErr.c_str()));
 
-    int responseID = selObj.addEntry(ipmiRaw.c_str());
+    responseID = selObj.addEntry(ipmiRaw.c_str());
     if (responseID < 0)
     {
         return ipmi::responseUnspecifiedError();
     }
+#endif
+
     return ipmi::responseSuccess((uint16_t)responseID);
 }
 
-ipmi::RspType<uint8_t> ipmiStorageClearSEL(uint16_t reservationID,
+ipmi::RspType<uint8_t> ipmiStorageClearSEL(ipmi::Context::ptr ctx,
+                                           uint16_t reservationID,
                                            const std::array<uint8_t, 3>& clr,
                                            uint8_t eraseOperation)
 {
-    if (!checkSELReservation(reservationID))
-    {
-        return ipmi::responseInvalidReservationId();
-    }
 
     static constexpr std::array<uint8_t, 3> clrExpected = {'C', 'L', 'R'};
     if (clr != clrExpected)
     {
         return ipmi::responseInvalidFieldRequest();
+    }
+
+#if BIC_ENABLED
+
+    std::vector<uint8_t> respData;
+    std::vector<uint8_t> reqData;
+
+    reqData.insert(reqData.begin(), reservationID & 0xFF);
+    reqData.insert(reqData.begin() + 1, (reservationID >> 8) & 0xFF);
+    reqData.insert(reqData.begin() + 2, 'C');
+    reqData.insert(reqData.begin() + 3, 'L');
+    reqData.insert(reqData.begin() + 4, 'R');
+    reqData.insert(reqData.end(), eraseOperation);
+
+    uint8_t bicAddr = (uint8_t)ctx->hostIdx << 2;
+
+    if (sendBicCmd(ctx->netFn, ctx->cmd, bicAddr, reqData, respData))
+    {
+
+        return ipmi::responseUnspecifiedError();
+    }
+
+#else
+
+    if (!checkSELReservation(reservationID))
+    {
+        return ipmi::responseInvalidReservationId();
     }
 
     /* If there is no sel then return erase complete */
@@ -1414,6 +1518,7 @@ ipmi::RspType<uint8_t> ipmiStorageClearSEL(uint16_t reservationID,
     {
         return ipmi::responseUnspecifiedError();
     }
+#endif
 
     return ipmi::responseSuccess(fb_oem::ipmi::sel::eraseComplete);
 }
@@ -1447,13 +1552,63 @@ ipmi::RspType<uint16_t> ipmiStorageGetSELTimeUtcOffset()
     return ipmi::responseSuccess(utcOffset);
 }
 
+ipmi::RspType<std::vector<uint8_t>>
+    ipmiStorageAddSELAllocInfo(ipmi::Context::ptr ctx)
+{
+
+    std::vector<uint8_t> respData;
+    std::vector<uint8_t> reqData;
+
+    uint8_t bicAddr = (uint8_t)ctx->hostIdx << 2;
+
+    if (sendBicCmd(ctx->netFn, ctx->cmd, bicAddr, reqData, respData))
+    {
+
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(respData);
+}
+
+ipmi::RspType<std::vector<uint8_t>>
+    ipmiStorageReserveSEL(ipmi::Context::ptr ctx)
+{
+    std::vector<uint8_t> respData;
+    std::vector<uint8_t> reqData;
+
+    uint8_t bicAddr = (uint8_t)ctx->hostIdx << 2;
+
+    if (sendBicCmd(ctx->netFn, ctx->cmd, bicAddr, reqData, respData))
+    {
+
+        return ipmi::responseUnspecifiedError();
+    }
+
+    return ipmi::responseSuccess(respData);
+}
 void registerSELFunctions()
 {
+
+    phosphor::logging::log<phosphor::logging::level::INFO>(
+        "Registering SEL commands");
+
     // <Get SEL Info>
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
                           ipmi::storage::cmdGetSelInfo, ipmi::Privilege::User,
                           ipmiStorageGetSELInfo);
+#if BIC_ENABLED
 
+    // <Add SEL Allocation info>
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
+                          ipmi::storage::cmdGetSelAllocationInfo,
+                          ipmi::Privilege::Operator,
+                          ipmiStorageAddSELAllocInfo);
+
+    // <Reserve SEL>
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
+                          ipmi::storage::cmdReserveSel, ipmi::Privilege::User,
+                          ipmiStorageReserveSEL);
+#endif
     // <Get SEL Entry>
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnStorage,
                           ipmi::storage::cmdGetSelEntry, ipmi::Privilege::User,
