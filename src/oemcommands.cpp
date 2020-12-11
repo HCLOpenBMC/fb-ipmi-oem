@@ -16,6 +16,9 @@
  */
 
 #include "xyz/openbmc_project/Common/error.hpp"
+#include <xyz/openbmc_project/Control/Boot/Mode/server.hpp>
+#include <xyz/openbmc_project/Control/Boot/Source/server.hpp>
+#include <ipmid/api-types.hpp>
 
 #include <ipmid/api.hpp>
 #include <ipmid/utils.hpp>
@@ -24,6 +27,7 @@
 #include <oemcommands.hpp>
 #include <phosphor-logging/log.hpp>
 #include <sdbusplus/bus.hpp>
+#include <boost/container/flat_map.hpp>
 
 #include <array>
 #include <cstring>
@@ -133,6 +137,45 @@ DbusObjectInfo getIPObject(sdbusplus::bus::bus& bus,
 }
 
 } // namespace network
+
+namespace boot
+{
+
+using namespace sdbusplus::xyz::openbmc_project::Control::Boot::server;
+using IpmiValue = uint8_t;
+constexpr auto ipmiDefault = 0;
+
+std::map<IpmiValue, Source::Sources> sourceIpmiToDbus  = {
+    {ipmiDefault, Source::Sources::Default},
+    {0x0f, Source::Sources::RemovableMedia},  //USB
+    {0x01, Source::Sources::Network},         //net_ipv6
+    {0x02, Source::Sources::Disk},            //sata_hdd
+    {0x05, Source::Sources::ExternalMedia}};  //sata_cd
+
+std::map<IpmiValue, Mode::Modes> modeIpmiToDbus = {
+    {0x06, Mode::Modes::Setup},
+    {ipmiDefault, Mode::Modes::Regular}};
+
+std::map<Source::Sources, IpmiValue> sourceDbusToIpmi = {
+    {Source::Sources::Default, ipmiDefault},
+    {Source::Sources::RemovableMedia, 0x0f},
+    {Source::Sources::Network, 0x01},
+    {Source::Sources::Disk, 0x02},
+    {Source::Sources::ExternalMedia, 0x05}};
+
+std::map<Mode::Modes, IpmiValue> modeDbusToIpmi = {
+    {Mode::Modes::Setup, 0x06},
+    {Mode::Modes::Regular, ipmiDefault}};
+
+static constexpr auto bootModeIntf = "xyz.openbmc_project.Control.Boot.Mode";
+static constexpr auto bootSourceIntf =
+    "xyz.openbmc_project.Control.Boot.Source";
+static constexpr auto enabledIntf = "xyz.openbmc_project.Object.Enable";
+static constexpr auto bootSourceProp = "BootSource";
+static constexpr auto bootModeProp = "BootMode";
+static constexpr auto oneTimeBootEnableProp = "Enabled";
+
+}//namespace boot_options
 
 //----------------------------------------------------------------------
 // Helper functions for storing oem data
@@ -546,8 +589,41 @@ ipmi_ret_t ipmiOemGetBoardID(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
 }
 
 /* Helper functions to set boot order */
-void setBootOrder(uint8_t* data)
+void setBootOrder(std::string oneTimePath, uint8_t* data, std::string key)
 {
+
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+
+    // SETTING BOOT MODE PROPERTY
+    auto bootOption =
+      ipmi::boot::modeIpmiToDbus.find((data[0]));
+    std::string boot =
+      ipmi::boot::Mode::convertModesToString((bootOption->second));
+
+    std::string service = getService(*dbus, ipmi::boot::bootModeIntf, oneTimePath);
+    setDbusProperty(*dbus, service, oneTimePath, ipmi::boot::bootModeIntf,
+                   ipmi::boot::bootModeProp, boot);
+
+    // SETTING BOOT SOURCE PROPERTY
+
+    auto bootOrder =
+      ipmi::boot::sourceIpmiToDbus.find((data[1]));
+    std::string bootSource =
+      ipmi::boot::Source::convertSourcesToString((bootOrder->second));
+
+    service = getService(*dbus, ipmi::boot::bootSourceIntf, oneTimePath);
+    setDbusProperty(*dbus, service, oneTimePath, ipmi::boot::bootSourceIntf,
+                   ipmi::boot::bootSourceProp, bootSource);
+
+#if 1
+
+    std::cout << "..... Setting Boot Order .....\n";
+    std::cout << "boot mode : " << boot << "\n";
+    std::cout << "boot source : " << bootSource << "\n";
+    std::cout.flush();
+
+#endif
+
     nlohmann::json bootMode;
     uint8_t mode = data[0];
     int i;
@@ -556,16 +632,16 @@ void setBootOrder(uint8_t* data)
     bootMode["CMOS_CLR"] = (mode & BOOT_MODE_CMOS_CLR ? true : false);
     bootMode["FORCE_BOOT"] = (mode & BOOT_MODE_FORCE_BOOT ? true : false);
     bootMode["BOOT_FLAG"] = (mode & BOOT_MODE_BOOT_FLAG ? true : false);
-    oemData[KEY_BOOT_ORDER][KEY_BOOT_MODE] = bootMode;
+    oemData[key][KEY_BOOT_MODE] = bootMode;
 
     /* Initialize boot sequence array */
-    oemData[KEY_BOOT_ORDER][KEY_BOOT_SEQ] = {};
+    oemData[key][KEY_BOOT_SEQ] = {};
     for (i = 1; i < SIZE_BOOT_ORDER; i++)
     {
         if (data[i] >= BOOT_SEQ_ARRAY_SIZE)
-            oemData[KEY_BOOT_ORDER][KEY_BOOT_SEQ][i - 1] = "NA";
+            oemData[key][KEY_BOOT_SEQ][i - 1] = "NA";
         else
-            oemData[KEY_BOOT_ORDER][KEY_BOOT_SEQ][i - 1] = bootSeq[data[i]];
+            oemData[key][KEY_BOOT_SEQ][i - 1] = bootSeq[data[i]];
     }
 
     flushOemData();
@@ -574,55 +650,167 @@ void setBootOrder(uint8_t* data)
 //----------------------------------------------------------------------
 // Set Boot Order (CMD_OEM_SET_BOOT_ORDER)
 //----------------------------------------------------------------------
-ipmi_ret_t ipmiOemSetBootOrder(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
-                               ipmi_request_t request, ipmi_response_t response,
-                               ipmi_data_len_t data_len, ipmi_context_t context)
+ipmi::RspType<>
+    ipmiOemSetBootOrder(ipmi::Context::ptr ctx, std::vector<uint8_t> data)
 {
-    uint8_t* req = reinterpret_cast<uint8_t*>(request);
-    uint8_t len = *data_len;
+    printf("..... Set boot order ..... \n");
+    std::cout.flush();
 
-    *data_len = 0;
-
-    if (len != SIZE_BOOT_ORDER)
+    uint8_t bootSeq[SIZE_BOOT_ORDER];
+    printf("Data : \n");
+    std::cout.flush();
+    for(int i=0; i<data.size(); i++)
     {
-        phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid Boot order length received");
-        return IPMI_CC_REQ_DATA_LEN_INVALID;
+       bootSeq[i] = data.at(i);
+       printf("  %d :", bootSeq[i]);
+       std::cout.flush();
+    }
+    printf("\n");
+    std::cout.flush();
+
+    std::string host = INSTANCES;
+    int host_id;
+
+    // INITIALIZING HOST
+    if (host == "0")
+    {
+        host_id = 0;
+    }
+    else
+    {
+        host_id = ctx->channelIdx + 1;
     }
 
-    setBootOrder(req);
+    std::string host_name = "host" + std::to_string(host_id);
+    std::string key = "KEY_BOOT_ORDER_" + std::to_string(host_id);
 
-    return IPMI_CC_OK;
+    std::string persistentObjPath =   
+        "/xyz/openbmc_project/control/" + host_name + "/boot";
+    std::string oneTimePath =
+        "/xyz/openbmc_project/control/" + host_name + "/boot/one_time";
+
+    bool permanent = false;
+
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+
+    std::string service = getService(*dbus, ipmi::boot::enabledIntf, oneTimePath);
+    Value variant = getDbusProperty(*dbus, service, oneTimePath,
+                                    ipmi::boot::enabledIntf, ipmi::boot::oneTimeBootEnableProp);
+    auto oneTimeEnabled = std::get<bool>(variant);
+
+    if (permanent == oneTimeEnabled)
+    {
+        setDbusProperty(*dbus, service, oneTimePath, ipmi::boot::enabledIntf,
+                       ipmi::boot::oneTimeBootEnableProp, !permanent);
+    }
+
+    auto bootObjPath = oneTimePath;
+    if (oneTimeEnabled == false)
+    {
+        bootObjPath = persistentObjPath;
+    }
+
+    setBootOrder(bootObjPath, bootSeq, key);
+
+    return ipmi::responseSuccess();
+
 }
 
 //----------------------------------------------------------------------
 // Get Boot Order (CMD_OEM_GET_BOOT_ORDER)
 //----------------------------------------------------------------------
-ipmi_ret_t ipmiOemGetBootOrder(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
-                               ipmi_request_t request, ipmi_response_t response,
-                               ipmi_data_len_t data_len, ipmi_context_t context)
+ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
+    ipmiOemGetBootOrder(ipmi::Context::ptr ctx)
 {
-    uint8_t* res = reinterpret_cast<uint8_t*>(response);
+    printf("..... Get Boot order ..... \n");
+    std::cout.flush();
+    std::string host = INSTANCES;
+    int host_id;
+
+    // SPLITTING HOST INSTANCES
+    std::stringstream ss(host);
+    std::string item;
+    std::vector<std::string> host_instances;
+    while (std::getline(ss, item, ' '))
+    {
+        host_instances.push_back(item);
+    }
+
+    // INITIALIZING HOST
+    if (host == "0")
+    {
+        host_id =0;
+    }
+    else
+    {
+        host_id = ctx->channelIdx + 1;
+    }
+
+    std::string host_name = "host" + std::to_string(host_id);
+    uint8_t bootOption;
+    uint8_t bootOrder;
+    uint8_t bootSeq[SIZE_BOOT_ORDER];
+
+    std::string persistentObjPath =
+        "/xyz/openbmc_project/control/" + host_name + "/boot";
+    std::string oneTimePath =
+        "/xyz/openbmc_project/control/" + host_name + "/boot/one_time";
+
+    // GETTING ONE TIME ENABLE PROPERTY
+
+    auto oneTimeEnabled = false;
+    // read one time Enabled property
+    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
+    std::string service = getService(*dbus, ipmi::boot::enabledIntf, oneTimePath);
+    Value variant = getDbusProperty(*dbus, service, oneTimePath,
+                                   ipmi::boot::enabledIntf, ipmi::boot::oneTimeBootEnableProp);
+    oneTimeEnabled = std::get<bool>(variant);
+
+    auto bootObjPath = oneTimePath;
+    if (oneTimeEnabled == false)
+    {
+        bootObjPath = persistentObjPath;
+    }
+
+    // GETTING PROPERTY OF MODE INTERFACE
+
+    service = getService(*dbus, ipmi::boot::bootModeIntf, bootObjPath);
+    variant = getDbusProperty(*dbus, service, bootObjPath, ipmi::boot::bootModeIntf,
+                              ipmi::boot::bootModeProp);
+
+    auto bootMode =
+        ipmi::boot::Mode::convertModesFromString(std::get<std::string>(variant));
+
+    bootOption = ipmi::boot::modeDbusToIpmi.at(bootMode);
+
+     // GETTING PROPERTY OF SOURCE INTERFACE
+
+    service = getService(*dbus, ipmi::boot::bootSourceIntf, bootObjPath);
+    variant = getDbusProperty(*dbus, service, bootObjPath, ipmi::boot::bootSourceIntf,
+                             ipmi::boot::bootSourceProp);
+    auto bootSource =
+        ipmi::boot::Source::convertSourcesFromString(std::get<std::string>(variant));
+
+    bootOrder = ipmi::boot::sourceDbusToIpmi.at(bootSource);
+
+    std::string key = "KEY_BOOT_ORDER_" + std::to_string(host_id);
     uint8_t mode = 0;
-    int i;
 
-    *data_len = SIZE_BOOT_ORDER;
-
-    if (oemData.find(KEY_BOOT_ORDER) == oemData.end())
+    if (oemData.find(key) == oemData.end())
     {
         /* Return default boot order 0100090203ff */
         uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
             BOOT_MODE_UEFI,      bootMap["USB_DEV"], bootMap["NET_IPV6"],
             bootMap["SATA_HDD"], bootMap["SATA_CD"], 0xff};
 
-        memcpy(res, defaultBoot, SIZE_BOOT_ORDER);
+        memcpy(bootSeq, defaultBoot, SIZE_BOOT_ORDER);
         phosphor::logging::log<phosphor::logging::level::INFO>(
             "Set default boot order");
-        setBootOrder(defaultBoot);
+        setBootOrder(bootObjPath, defaultBoot, key);
     }
     else
     {
-        nlohmann::json bootMode = oemData[KEY_BOOT_ORDER][KEY_BOOT_MODE];
+        nlohmann::json bootMode = oemData[key][KEY_BOOT_MODE];
         if (bootMode["UEFI"])
             mode |= BOOT_MODE_UEFI;
         if (bootMode["CMOS_CLR"])
@@ -630,19 +818,30 @@ ipmi_ret_t ipmiOemGetBootOrder(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
         if (bootMode["BOOT_FLAG"])
             mode |= BOOT_MODE_BOOT_FLAG;
 
-        res[0] = mode;
+        bootSeq[0] = mode;
 
-        for (i = 1; i < SIZE_BOOT_ORDER; i++)
+        for (int i = 1; i < SIZE_BOOT_ORDER; i++)
         {
-            std::string seqStr = oemData[KEY_BOOT_ORDER][KEY_BOOT_SEQ][i - 1];
+            std::string seqStr = oemData[key][KEY_BOOT_SEQ][i - 1];
             if (bootMap.find(seqStr) != bootMap.end())
-                res[i] = bootMap[seqStr];
+                bootSeq[i] = bootMap[seqStr];
             else
-                res[i] = 0xff;
+                bootSeq[i] = 0xff;
         }
-    }
+     }
 
-    return IPMI_CC_OK;
+
+#if 1
+    std::cout << "ONE TIME PROPERTY : " << oneTimeEnabled << "\n";
+    std::cout << "HOST_INSTANCES    : " << host << "\n";
+    std::cout << "HOST NAME         : " << host_name << "\n";
+    std::cout << "CTX               : " << ctx->channelIdx << "\n";
+    std::cout << "KEY               : " << key << "\n";
+    std::cout.flush();
+#endif
+
+    return ipmi::responseSuccess(bootOption, bootOrder, bootSeq[2], bootSeq[3], bootSeq[4], bootSeq[5]);
+
 }
 
 //----------------------------------------------------------------------
@@ -1646,12 +1845,12 @@ static void registerOEMFunctions(void)
     ipmiPrintAndRegister(NETFUN_NONE, CMD_OEM_GET_BOARD_ID, NULL,
                          ipmiOemGetBoardID,
                          PRIVILEGE_USER); // Get Board ID
-    ipmiPrintAndRegister(NETFUN_NONE, CMD_OEM_SET_BOOT_ORDER, NULL,
-                         ipmiOemSetBootOrder,
-                         PRIVILEGE_USER); // Set Boot Order
-    ipmiPrintAndRegister(NETFUN_NONE, CMD_OEM_GET_BOOT_ORDER, NULL,
-                         ipmiOemGetBootOrder,
-                         PRIVILEGE_USER); // Get Boot Order
+//    ipmiPrintAndRegister(NETFUN_NONE, CMD_OEM_SET_BOOT_ORDER, NULL,
+//                         ipmiOemSetBootOrder,
+//                         PRIVILEGE_USER); // Set Boot Order
+//    ipmiPrintAndRegister(NETFUN_NONE, CMD_OEM_GET_BOOT_ORDER, NULL,
+//                         ipmiOemGetBootOrder,
+//                         PRIVILEGE_USER); // Get Boot Order
     ipmiPrintAndRegister(NETFUN_NONE, CMD_OEM_SET_MACHINE_CONFIG_INFO, NULL,
                          ipmiOemSetMachineCfgInfo,
                          PRIVILEGE_USER); // Set Machine Config Info
@@ -1717,6 +1916,14 @@ static void registerOEMFunctions(void)
                                ipmi::dcmi::cmdActDeactivatePwrLimit,
                                ipmi::Privilege::Operator,
                                ipmiOemDCMIApplyPowerLimit); // Apply Power Limit
+
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemOne,
+                          CMD_OEM_GET_BOOT_ORDER, ipmi::Privilege::User,
+                          ipmiOemGetBootOrder);
+
+    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemOne,
+                          CMD_OEM_SET_BOOT_ORDER, ipmi::Privilege::User,
+                          ipmiOemSetBootOrder);
 
     return;
 }
