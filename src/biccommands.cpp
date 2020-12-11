@@ -67,25 +67,34 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t, uint2_t, uint6_t, uint8_t,
 }
 
 //----------------------------------------------------------------------
-// ipmiOemPostBufferHandler (CMD_OEM_BIC_POST_BUFFER_INFO)
+// ipmiOemPostCodeHandler (CMD_OEM_BIC_POST_BUFFER_INFO)
 // This Function will handle BIC incomming postcode from multi-host for
 // netfn=0x38 and cmd=0x08 send the response back to the sender.
 //----------------------------------------------------------------------
 
 ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
-    ipmiOemPostBufferHandler(ipmi::Context::ptr ctx,
+    ipmiOemPostCodeHandler(ipmi::Context::ptr ctx,
                              std::array<uint8_t, 3> iana, uint8_t interface,
-                             std::vector<uint8_t> data)
+                             uint8_t data)
 {
     // creating bus connection
     auto conn = getSdBus();
 
-    // storing post code as varaint
-    std::variant<uint64_t> postCode = static_cast<uint64_t>(data.at(0));
+    try
+    {
+        if(data == NULL)
+        {
+            throw "Input Data Vector is empty";
+        }
+    }
+    catch (std::exception& e)
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+         "Vector is empty");
+    }
 
-    printf("Postcode : %d\n", postCode);
-    printf("Channel Idx : %d\n", ctx->hostIdx);
-    std::cout.flush();
+    // storing post code as varaint
+    std::variant<uint64_t> postCode = static_cast<uint64_t>(data);
 
     // creating dbus objects for 1 to N process
     const std::string dbusObj = "/xyz/openbmc_project/state/boot/raw" +
@@ -109,7 +118,6 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
             "Error in set Value of postd Raw interface");
     }
 
-
     // sending the response with headers
     return ipmi::responseSuccess(iana, interface);
 }
@@ -125,7 +133,7 @@ static void registerBICFunctions(void)
                           ipmiOemBicHandler);
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
-                          ipmiOemPostBufferHandler);
+                          ipmiOemPostCodeHandler);
     return;
 }
 
