@@ -98,15 +98,19 @@ ipmi::RspType<std::array<uint8_t, 3>, uint8_t>
 
         // Invoke method call function
         auto reply = conn->call(method);
+
+        // sending the success response with headers
+        return ipmi::responseSuccess(iana, interface);
     }
     catch (std::exception& e)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
          "post code handler error\n");
+
+        // sending the Error response
+        return ipmi::responseResponseError();
     }
 
-    // sending the response with headers
-    return ipmi::responseSuccess(iana, interface);
 }
 
 static void registerBICFunctions(void)
