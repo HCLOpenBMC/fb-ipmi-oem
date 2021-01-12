@@ -8,7 +8,7 @@ set (CMAKE_CXX_STANDARD 17)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+#set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 
 project (fb-ipmi-oem CXX)
 
@@ -71,8 +71,8 @@ add_library (zfboemcmds
              src/storagecommands.cpp src/usb-dbg.cpp
              src/selcommands.cpp src/transportcommands.cpp ${bicFile})
 
-if(HOST)
-   add_definitions (-DINSTANCES="${HOST}")
+if(NUMBER_OF_HOST)
+   add_definitions (-DINSTANCES="${NUMBER_OF_HOST}")
 else()
    add_definitions (-DINSTANCES="0")
 endif()
