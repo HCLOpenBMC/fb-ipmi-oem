@@ -71,6 +71,7 @@ add_library (zfboemcmds
              src/storagecommands.cpp src/usb-dbg.cpp
              src/selcommands.cpp src/transportcommands.cpp ${bicFile})
 
+message(" HOST : ${NUMBER_OF_HOST}")
 if(NUMBER_OF_HOST)
    add_definitions (-DINSTANCES="${NUMBER_OF_HOST}")
 else()
