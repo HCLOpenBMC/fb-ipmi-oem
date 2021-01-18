@@ -120,9 +120,9 @@ static void registerBICFunctions(void)
     ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
                           cmdOemBicInfo, ipmi::Privilege::User,
                           ipmiOemBicHandler);
-    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
-                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
-                          ipmiOemPostCodeHandler);
+//    ipmi::registerHandler(ipmi::prioOpenBmcBase, ipmi::netFnOemFive,
+//                          cmdOemSendPostBufferToBMC, ipmi::Privilege::User,
+//                          ipmiOemPostCodeHandler);
     return;
 }
 
