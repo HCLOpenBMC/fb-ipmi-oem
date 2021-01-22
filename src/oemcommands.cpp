@@ -646,11 +646,11 @@ ipmi::RspType<std::vector<uint8_t>>
     std::cout.flush();
 
     uint8_t bootSeq[SIZE_BOOT_ORDER];
-    int host = std::stoi(INSTANCES);
-    uint8_t host_id;
+    uint8_t hostId;
     int len = data.size();
 
     printf("Len : %d \n",len);
+    std::cout << "INSTANCES : "<< INSTANCES <<"\n";
     std::cout.flush();
 
     if (len != SIZE_BOOT_ORDER)
@@ -670,15 +670,15 @@ ipmi::RspType<std::vector<uint8_t>>
     std::cout.flush();
 
     // INITIALIZING HOST
-    if (ctx->hostIdx < host)
+    if (ctx->hostIdx < INSTANCES)
     {
-       if (host == 0)
+       if (INSTANCES == 1)
        {
-           host_id = ctx->hostIdx;
+           hostId = ctx->hostIdx;
        }
        else
        {
-           host_id = ctx->hostIdx + 1;
+           hostId = ctx->hostIdx + 1;
        }
     }
 
@@ -687,8 +687,6 @@ ipmi::RspType<std::vector<uint8_t>>
 
     std::string bootObjPath =   
         "/xyz/openbmc_project/control/" + host_name + "/boot";
-
-    std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
 
     setBootOrder(bootObjPath, bootSeq, bootOrderKey);
 
@@ -704,24 +702,25 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
 {
     printf("..... Get Boot order ..... \n");
     std::cout.flush();
+    std::cout << "INSTANCES :" << INSTANCES << "\n";
+    std::cout.flush();
 
-    int host = std::stoi(INSTANCES);
-    uint8_t host_id;
+    uint8_t hostId;
     uint8_t bootOption;
     uint8_t bootOrder;
     uint8_t bootSeq[SIZE_BOOT_ORDER];
     uint8_t mode = 0;
 
     // INITIALIZING HOST
-    if (ctx->hostIdx < host)
+    if (ctx->hostIdx < INSTANCES)
     {
-       if (host == 0)
+       if (INSTANCES == 1)
        {
-           host_id = ctx->hostIdx;
+           hostId = ctx->hostIdx;
        }
        else
        {
-           host_id = ctx->hostIdx + 1;
+           hostId = ctx->hostIdx + 1;
        }
     }
 
@@ -755,7 +754,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
 
     std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(host_id);
 
-    std::cout << "HOST_INSTANCES    : " << host << "\n";
+    std::cout << "HOST_INSTANCES    : " << INSTANCES << "\n";
     std::cout << "HOST NAME         : " << host_name << "\n";
     std::cout << "CTX               : " << ctx->hostIdx << "\n";
     std::cout << "KEY               : " << bootOrderKey << "\n";
