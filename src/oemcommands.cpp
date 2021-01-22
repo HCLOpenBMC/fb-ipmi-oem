@@ -682,10 +682,10 @@ ipmi::RspType<std::vector<uint8_t>>
        }
     }
 
-    std::string host_name = "host" + std::to_string(host_id);
-    std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(host_id);
+    std::string host_name = "host" + std::to_string(hostId);
+    std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(hostId);
 
-    std::string bootObjPath =   
+    std::string bootObjPath =
         "/xyz/openbmc_project/control/" + host_name + "/boot";
 
     setBootOrder(bootObjPath, bootSeq, bootOrderKey);
@@ -724,7 +724,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
        }
     }
 
-    std::string host_name = "host" + std::to_string(host_id);
+    std::string host_name = "host" + std::to_string(hostId);
 
     std::string bootObjPath =
         "/xyz/openbmc_project/control/" + host_name + "/boot";
@@ -752,7 +752,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
 
     bootOrder = ipmi::boot::sourceDbusToIpmi.at(bootSource);
 
-    std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(host_id);
+    std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(hostId);
 
     std::cout << "HOST_INSTANCES    : " << INSTANCES << "\n";
     std::cout << "HOST NAME         : " << host_name << "\n";
