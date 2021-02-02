@@ -650,8 +650,8 @@ ipmi::RspType<std::vector<uint8_t>>
     int len = data.size();
 
     printf("Len : %d \n",len);
-    std::cout << "INSTANCES : "<< INSTANCES <<"\n";
-    std::cout.flush();
+//    std::cout << "INSTANCES : "<< INSTANCES <<"\n";
+//    std::cout.flush();
 
     if (len != SIZE_BOOT_ORDER)
     {
@@ -669,10 +669,19 @@ ipmi::RspType<std::vector<uint8_t>>
     printf("\n");
     std::cout.flush();
 
+   std::string host = INSTANCES;
+    int id = ctx->hostIdx + 1;
+    std::string var = std::to_string(id);
+    int pos = host.find(var);
+    std::cout << "HOST INSTANCES :" << pos << "\n";
+    std::cout.flush();
+
+    std::cout << "ID : "<< id <<  "\n";
+    std::cout.flush();
     // INITIALIZING HOST
-    if (ctx->hostIdx < INSTANCES)
+    if (pos > 0)
     {
-       if (INSTANCES == 1)
+       if (INSTANCES == "1")
        {
            hostId = ctx->hostIdx;
        }
@@ -711,10 +720,19 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     uint8_t bootSeq[SIZE_BOOT_ORDER];
     uint8_t mode = 0;
 
+    std::string host = INSTANCES;
+    int id = ctx->hostIdx + 1;
+    std::string var = std::to_string(id);
+    int pos = host.find(var);
+    std::cout << "HOST INSTANCES :" << pos << "\n";
+    std::cout.flush();
+
+    std::cout << "ID : "<< id <<  "\n";
+    std::cout.flush();
     // INITIALIZING HOST
-    if (ctx->hostIdx < INSTANCES)
+    if (pos > 0)
     {
-       if (INSTANCES == 1)
+       if (INSTANCES == "1")
        {
            hostId = ctx->hostIdx;
        }
@@ -754,7 +772,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
 
     std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(hostId);
 
-    std::cout << "HOST_INSTANCES    : " << INSTANCES << "\n";
+//    std::cout << "HOST_INSTANCES    : " << INSTANCES << "\n";
     std::cout << "HOST NAME         : " << host_name << "\n";
     std::cout << "CTX               : " << ctx->hostIdx << "\n";
     std::cout << "KEY               : " << bootOrderKey << "\n";
