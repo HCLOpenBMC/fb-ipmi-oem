@@ -657,8 +657,8 @@ ipmi::RspType<std::vector<uint8_t>>
     int len = data.size();
 
     printf("Len : %d \n",len);
-//    std::cout << "INSTANCES : "<< INSTANCES <<"\n";
-//    std::cout.flush();
+    std::cout << "INSTANCES : "<< INSTANCES <<"\n";
+    std::cout.flush();
 
     if (len != SIZE_BOOT_ORDER)
     {
@@ -676,17 +676,17 @@ ipmi::RspType<std::vector<uint8_t>>
     printf("\n");
     std::cout.flush();
 
-   std::string host = INSTANCES;
-    int id = ctx->hostIdx + 1;
-    std::string var = std::to_string(id);
-    int pos = host.find(var);
-    std::cout << "HOST INSTANCES :" << pos << "\n";
+    std::string host = INSTANCES;
+    std::string hostNum = std::to_string(ctx->hostIdx + 1);
+    int pos = host.find(hostNum);
+    std::cout << "HOST INSTANCES :" << host << "\n";
+    std::cout << "Position : " << pos << "\n";
     std::cout.flush();
 
-    std::cout << "ID : "<< id <<  "\n";
+    std::cout << "HOST NUM : "<< hostNum <<  "\n";
     std::cout.flush();
     // INITIALIZING HOST
-    if (pos > 0)
+    if (pos >= 0)
     {
        if (INSTANCES == "1")
        {
@@ -697,12 +697,23 @@ ipmi::RspType<std::vector<uint8_t>>
            hostId = ctx->hostIdx + 1;
        }
     }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Invalid Host Id received");
+        return ipmi::responseInvalidCommand();
+    }
+
 
     std::string host_name = "host" + std::to_string(hostId);
     std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(hostId);
 
     std::string bootObjPath =
         "/xyz/openbmc_project/control/" + host_name + "/boot";
+
+    std::cout << "Host Name : "<< host_name <<  "\n";
+    std::cout << " Obj Path : " << bootObjPath << "\n";
+    std::cout.flush();
 
     setBootOrder(bootObjPath, bootSeq, bootOrderKey);
 
@@ -728,16 +739,16 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     uint8_t mode = 0;
 
     std::string host = INSTANCES;
-    int id = ctx->hostIdx + 1;
-    std::string var = std::to_string(id);
-    int pos = host.find(var);
-    std::cout << "HOST INSTANCES :" << pos << "\n";
+    std::string hostNum = std::to_string(ctx->hostIdx + 1);
+    int pos = host.find(hostNum);
+    std::cout << "position :" << pos << "\n";
     std::cout.flush();
 
-    std::cout << "ID : "<< id <<  "\n";
+    std::cout << "HOST : "<< host <<  "\n";
+    std::cout << "HOST NUM : "<< hostNum <<  "\n";
     std::cout.flush();
     // INITIALIZING HOST
-    if (pos > 0)
+    if (pos >= 0)
     {
        if (INSTANCES == "1")
        {
@@ -748,11 +759,20 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
            hostId = ctx->hostIdx + 1;
        }
     }
+    else
+    {
+        phosphor::logging::log<phosphor::logging::level::ERR>(
+            "Invalid Host Id received");
+        return ipmi::responseInvalidCommand();
+    }
 
     std::string host_name = "host" + std::to_string(hostId);
 
     std::string bootObjPath =
         "/xyz/openbmc_project/control/" + host_name + "/boot";
+
+    std::cout << "OBJ PATH: "<< bootObjPath <<  "\n";
+    std::cout.flush();
 
     // GETTING PROPERTY OF MODE INTERFACE
 
