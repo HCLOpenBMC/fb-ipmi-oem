@@ -739,6 +739,60 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     uint8_t mode = 0;
 
     std::string host = INSTANCES;
+//-----------------------------------------
+
+    std::stringstream ss(host);
+    std::vector<std::string> out;
+    std::string s;
+    while (std::getline(ss, s, ' ')) {
+        out.push_back(s);
+    }
+
+    printf("SPLIT STRING \n");
+    std::cout.flush();
+
+    for (auto &s: out) {
+        std::cout << s << '\n';
+    }
+
+    uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
+       BOOT_MODE_UEFI,      bootMap["USB_DEV"], bootMap["NET_IPV6"],
+       bootMap["SATA_HDD"], bootMap["SATA_CD"], 0xff};
+
+    std::map<std::string,std::vector<uint8_t>> boot;
+
+    std::vector<uint8_t> v;
+    for (int i=0; i< SIZE_BOOT_ORDER ; i++)
+    {
+        v.push_back(defaultBoot[i]);
+        printf("%d \n",v[i]); 
+    }
+
+    printf("DEFAULT BOOT ORDER \n");
+//    std::cout << v << "\n";
+    std::cout.flush();
+
+    for (auto &a: v) {
+        std::cout << a << '\n';
+        std::cout.flush();
+    }
+
+/*    for(auto &s: out)
+    {
+        std::cout<< s << defaultBoot[SIZE_BOOT_ORDER] << "\n";
+        auto resp = boot.emplace(s,defaultBoot);
+    }
+
+    for (const auto& data : boot)
+    {
+//        std::cout << data.first << "\n";
+//        std::cout.flush();
+//        std::cout << data.second << "\n";
+//        std::cout.flush();
+
+    }
+*/
+//-----------------------------------------
     std::string hostNum = std::to_string(ctx->hostIdx + 1);
     int pos = host.find(hostNum);
     std::cout << "position :" << pos << "\n";
