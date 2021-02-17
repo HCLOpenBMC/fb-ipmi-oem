@@ -176,6 +176,40 @@ static constexpr auto bootSourceIntf =
 static constexpr auto bootSourceProp = "BootSource";
 static constexpr auto bootModeProp = "BootMode";
 
+int findHost(int x)
+{
+    std::string host = INSTANCES;
+
+    std::stringstream ss(host);
+    std::vector<std::string> out;
+    std::string s;
+    while (std::getline(ss, s, ' ')) {
+        out.push_back(s);
+    }
+
+   uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
+       BOOT_MODE_UEFI,      bootMap["USB_DEV"], bootMap["NET_IPV6"],
+       bootMap["SATA_HDD"], bootMap["SATA_CD"], 0xff};
+
+   std::map<std::string,std::vector<uint8_t>> boots;
+   std::vector<uint8_t> v;
+
+   for (int i = 0; i < SIZE_BOOT_ORDER ; i++)
+   {
+       v.push_back(defaultBoot[i]);
+   }
+
+   for(auto& s: out)
+   {
+       boots.insert(make_pair(s, v));
+   }
+
+    std::string num = std::to_string(x + 1);
+    auto key = boots.find(num);
+    int a = std::stoi(key->first);
+
+    return a;
+}
 } // namespace boot
 
 //----------------------------------------------------------------------
@@ -676,26 +710,22 @@ ipmi::RspType<std::vector<uint8_t>>
     printf("\n");
     std::cout.flush();
 
-    std::string host = INSTANCES;
-    std::string hostNum = std::to_string(ctx->hostIdx + 1);
-    int pos = host.find(hostNum);
-    std::cout << "HOST INSTANCES :" << host << "\n";
-    std::cout << "Position : " << pos << "\n";
+//    std::string host = INSTANCES;
+//    std::string hostNum = std::to_string(ctx->hostIdx + 1);
+//    int pos = host.find(hostNum);
+
+    int y = ipmi::boot::findHost(2);
+
+//    std::cout << "HOST INSTANCES :" << host << "\n";
+    std::cout << "Position : " << y << "\n";
     std::cout.flush();
 
-    std::cout << "HOST NUM : "<< hostNum <<  "\n";
-    std::cout.flush();
+//    std::cout << "HOST NUM : "<< hostNum <<  "\n";
+//    std::cout.flush();
     // INITIALIZING HOST
-    if (pos >= 0)
+    if (y > 0)
     {
-       if (INSTANCES == "1")
-       {
-           hostId = ctx->hostIdx;
-       }
-       else
-       {
-           hostId = ctx->hostIdx + 1;
-       }
+       hostId = y;
     }
     else
     {
@@ -738,80 +768,15 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     uint8_t bootSeq[SIZE_BOOT_ORDER];
     uint8_t mode = 0;
 
-    std::string host = INSTANCES;
-//-----------------------------------------
+    int y = ipmi::boot::findHost(2);
 
-    std::stringstream ss(host);
-    std::vector<std::string> out;
-    std::string s;
-    while (std::getline(ss, s, ' ')) {
-        out.push_back(s);
-    }
-
-    printf("SPLIT STRING \n");
+    std::cout << "position :" << y << "\n";
     std::cout.flush();
 
-    for (auto &s: out) {
-        std::cout << s << '\n';
-    }
-
-    uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
-       BOOT_MODE_UEFI,      bootMap["USB_DEV"], bootMap["NET_IPV6"],
-       bootMap["SATA_HDD"], bootMap["SATA_CD"], 0xff};
-
-    std::map<std::string,std::vector<uint8_t>> boot;
-
-    std::vector<uint8_t> v;
-    for (int i=0; i< SIZE_BOOT_ORDER ; i++)
-    {
-        v.push_back(defaultBoot[i]);
-        printf("%d \n",v[i]); 
-    }
-
-    printf("DEFAULT BOOT ORDER \n");
-//    std::cout << v << "\n";
-    std::cout.flush();
-
-    for (auto &a: v) {
-        std::cout << a << '\n';
-        std::cout.flush();
-    }
-
-/*    for(auto &s: out)
-    {
-        std::cout<< s << defaultBoot[SIZE_BOOT_ORDER] << "\n";
-        auto resp = boot.emplace(s,defaultBoot);
-    }
-
-    for (const auto& data : boot)
-    {
-//        std::cout << data.first << "\n";
-//        std::cout.flush();
-//        std::cout << data.second << "\n";
-//        std::cout.flush();
-
-    }
-*/
-//-----------------------------------------
-    std::string hostNum = std::to_string(ctx->hostIdx + 1);
-    int pos = host.find(hostNum);
-    std::cout << "position :" << pos << "\n";
-    std::cout.flush();
-
-    std::cout << "HOST : "<< host <<  "\n";
-    std::cout << "HOST NUM : "<< hostNum <<  "\n";
-    std::cout.flush();
     // INITIALIZING HOST
-    if (pos >= 0)
+    if (y > 0)
     {
-       if (INSTANCES == "1")
-       {
-           hostId = ctx->hostIdx;
-       }
-       else
-       {
-           hostId = ctx->hostIdx + 1;
-       }
+       hostId = y;
     }
     else
     {
