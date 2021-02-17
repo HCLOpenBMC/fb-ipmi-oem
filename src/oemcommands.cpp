@@ -714,7 +714,7 @@ ipmi::RspType<std::vector<uint8_t>>
 //    std::string hostNum = std::to_string(ctx->hostIdx + 1);
 //    int pos = host.find(hostNum);
 
-    int y = ipmi::boot::findHost(2);
+    int y = ipmi::boot::findHost(ctx->hostIdx);
 
 //    std::cout << "HOST INSTANCES :" << host << "\n";
     std::cout << "Position : " << y << "\n";
@@ -725,7 +725,14 @@ ipmi::RspType<std::vector<uint8_t>>
     // INITIALIZING HOST
     if (y > 0)
     {
-       hostId = y;
+       if ( INSTANCES == "1")
+       {
+          hostId = ctx->hostIdx;
+       }
+       else
+       {
+          hostId = y;
+       }
     }
     else
     {
@@ -768,7 +775,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     uint8_t bootSeq[SIZE_BOOT_ORDER];
     uint8_t mode = 0;
 
-    int y = ipmi::boot::findHost(2);
+    int y = ipmi::boot::findHost(ctx->hostIdx);
 
     std::cout << "position :" << y << "\n";
     std::cout.flush();
@@ -776,7 +783,14 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     // INITIALIZING HOST
     if (y > 0)
     {
-       hostId = y;
+       if ( INSTANCES == "1")
+       {
+          hostId = ctx->hostIdx;
+       }
+       else
+       {
+          hostId = y;
+       }
     }
     else
     {
