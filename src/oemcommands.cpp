@@ -176,76 +176,51 @@ static constexpr auto bootSourceIntf =
 static constexpr auto bootSourceProp = "BootSource";
 static constexpr auto bootModeProp = "BootMode";
 
-int findHost(int id)
-{
-    std::string host = INSTANCES;
+std::string hostName, bootObjPath, bootOrderKey;
+int hostId;
 
-    std::stringstream ss(host);
-    std::vector<std::string> str;
-    std::string s;
-    while (std::getline(ss, s, ' ')) {
-        str.push_back(s);
+size_t findHost(int id)
+{
+    std::cout << " ID :" << id << "\n";
+    std::cout.flush();
+    std::string str = INSTANCES;
+
+    if (INSTANCES == "0")
+    {
+        hostId = id;
+    }
+    else
+    {
+        std::stringstream ss(str);
+        std::vector<std::string> host;
+        std::string s;
+        while (std::getline(ss, s, ' '))
+        {
+            host.push_back(s);
+        }
+
+        std::string num = std::to_string(id + 1);
+
+        auto found = std::lower_bound(host.begin(), host.end(), num);
+        std::cout << "Found : " << *found << "\n";
+        std::cout << " Dist : " << std::distance(host.begin(), found) << "\n";
+        std::cout.flush();
+
+       if ((found == host.end()) || (*found != num))
+       {
+            std::cout << "error \n";
+            std::cout.flush();
+            return -1;
+       }
+       hostId = id + 1;
     }
 
-   uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
-       BOOT_MODE_UEFI,      bootMap["USB_DEV"], bootMap["NET_IPV6"],
-       bootMap["SATA_HDD"], bootMap["SATA_CD"], 0xff};
+    hostName = "host" + std::to_string(hostId);
+    bootObjPath = "/xyz/openbmc_project/control/" + hostName + "/boot";
 
-   std::map<std::string,std::vector<uint8_t>> bootVal;
-   std::vector<uint8_t> defaultVal;
-
-   for (int i = 0; i < SIZE_BOOT_ORDER ; i++)
-   {
-       defaultVal.push_back(defaultBoot[i]);
-   }
-
-   for(auto& s: str)
-   {
-       bootVal.insert(make_pair(s, defaultVal));
-   }
-
-    std::string num = std::to_string(id + 1);
-    auto key = bootVal.find(num);
-    int ctxId = std::stoi(key->first);
-
-    return ctxId;
+    return hostId;
 }
 
-
-/*int findHost(int x)
-{
-    std::string host = INSTANCES;
-
-    std::stringstream ss(host);
-    std::vector<std::string> out;
-    std::string s;
-    while (std::getline(ss, s, ' ')) {
-        out.push_back(s);
-    }
-
-   uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
-       BOOT_MODE_UEFI,      bootMap["USB_DEV"], bootMap["NET_IPV6"],
-       bootMap["SATA_HDD"], bootMap["SATA_CD"], 0xff};
-
-   std::map<std::string,std::vector<uint8_t>> boots;
-   std::vector<uint8_t> v;
-
-   for (int i = 0; i < SIZE_BOOT_ORDER ; i++)
-   {
-       v.push_back(defaultBoot[i]);
-   }
-
-   for(auto& s: out)
-   {
-       boots.insert(make_pair(s, v));
-   }
-
-    std::string num = std::to_string(x + 1);
-    auto key = boots.find(num);
-    int a = std::stoi(key->first);
-
-    return a;
-}*/
 } // namespace boot
 
 //----------------------------------------------------------------------
@@ -660,30 +635,30 @@ ipmi_ret_t ipmiOemGetBoardID(ipmi_netfn_t netfn, ipmi_cmd_t cmd,
 }
 
 /* Helper functions to set boot order */
-void setBootOrder(std::string bootObjPath, uint8_t* data, std::string bootOrderKey)
+void setBootOrder(std::string bootObjPath, uint8_t* data,
+                  std::string bootOrderKey)
 {
 
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
 
     // SETTING BOOT MODE PROPERTY
-    auto bootValue =
-      ipmi::boot::modeIpmiToDbus.find((data[0]));
+    auto bootValue = ipmi::boot::modeIpmiToDbus.find((data[0]));
     std::string bootOption =
-      ipmi::boot::Mode::convertModesToString((bootValue->second));
+        ipmi::boot::Mode::convertModesToString((bootValue->second));
 
-    std::string service = getService(*dbus, ipmi::boot::bootModeIntf, bootObjPath);
+    std::string service =
+        getService(*dbus, ipmi::boot::bootModeIntf, bootObjPath);
     setDbusProperty(*dbus, service, bootObjPath, ipmi::boot::bootModeIntf,
-                   ipmi::boot::bootModeProp, bootOption);
+                    ipmi::boot::bootModeProp, bootOption);
 
     // SETTING BOOT SOURCE PROPERTY
-    auto bootOrder =
-      ipmi::boot::sourceIpmiToDbus.find((data[1]));
+    auto bootOrder = ipmi::boot::sourceIpmiToDbus.find((data[1]));
     std::string bootSource =
-      ipmi::boot::Source::convertSourcesToString((bootOrder->second));
+        ipmi::boot::Source::convertSourcesToString((bootOrder->second));
 
     service = getService(*dbus, ipmi::boot::bootSourceIntf, bootObjPath);
     setDbusProperty(*dbus, service, bootObjPath, ipmi::boot::bootSourceIntf,
-                   ipmi::boot::bootSourceProp, bootSource);
+                    ipmi::boot::bootSourceProp, bootSource);
 
     std::cout << "..... Setting Boot Order .....\n";
     std::cout << "boot mode : " << bootOption << "\n";
@@ -692,7 +667,6 @@ void setBootOrder(std::string bootObjPath, uint8_t* data, std::string bootOrderK
 
     nlohmann::json bootMode;
     uint8_t mode = data[0];
-    int i;
 
     bootMode["UEFI"] = (mode & BOOT_MODE_UEFI ? true : false);
     bootMode["CMOS_CLR"] = (mode & BOOT_MODE_CMOS_CLR ? true : false);
@@ -702,7 +676,7 @@ void setBootOrder(std::string bootObjPath, uint8_t* data, std::string bootOrderK
 
     /* Initialize boot sequence array */
     oemData[bootOrderKey][KEY_BOOT_SEQ] = {};
-    for (i = 1; i < SIZE_BOOT_ORDER; i++)
+    for (int i = 1; i < SIZE_BOOT_ORDER; i++)
     {
         if (data[i] >= BOOT_SEQ_ARRAY_SIZE)
             oemData[bootOrderKey][KEY_BOOT_SEQ][i - 1] = "NA";
@@ -723,11 +697,10 @@ ipmi::RspType<std::vector<uint8_t>>
     std::cout.flush();
 
     uint8_t bootSeq[SIZE_BOOT_ORDER];
-    uint8_t hostId;
-    int len = data.size();
+    size_t len = data.size();
 
-    printf("Len : %d \n",len);
-    std::cout << "INSTANCES : "<< INSTANCES <<"\n";
+    printf("Len : %d \n", len);
+    std::cout << "INSTANCES : " << INSTANCES << "\n";
     std::cout.flush();
 
     if (len != SIZE_BOOT_ORDER)
@@ -737,61 +710,31 @@ ipmi::RspType<std::vector<uint8_t>>
         return ipmi::responseReqDataLenInvalid();
     }
 
-    for(int i=0; i<data.size(); i++)
+    std::copy(std::begin(data), std::end(data), bootSeq);
+
+    for (int i = 0; i < data.size(); i++)
     {
-       bootSeq[i] = data.at(i);
-       printf("  %d :", bootSeq[i]);
-       std::cout.flush();
+        printf("  %d :", bootSeq[i]);
+        std::cout.flush();
     }
     printf("\n");
     std::cout.flush();
 
-//    std::string host = INSTANCES;
-//    std::string hostNum = std::to_string(ctx->hostIdx + 1);
-//    int pos = host.find(hostNum);
-
-    int ctxId = ipmi::boot::findHost(ctx->hostIdx);
-
-//    std::cout << "HOST INSTANCES :" << host << "\n";
-    std::cout << "Position : " << ctxId << "\n";
-    std::cout.flush();
-
-//    std::cout << "HOST NUM : "<< hostNum <<  "\n";
-//    std::cout.flush();
-    // INITIALIZING HOST
-    if (ctxId > 0)
-    {
-       if ( INSTANCES == "1")
-       {
-          hostId = ctx->hostIdx;
-       }
-       else
-       {
-          hostId = ctxId;
-       }
-    }
-    else
+//    int h = ipmi::boot::findHost(ctx->hostIdx);
+    if( ipmi::boot::findHost(ctx->hostIdx) == -1)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid Host Id received");
+             "Invalid Host Id received");
         return ipmi::responseInvalidCommand();
     }
 
-
-    std::string host_name = "host" + std::to_string(hostId);
-    std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(hostId);
-
-    std::string bootObjPath =
-        "/xyz/openbmc_project/control/" + host_name + "/boot";
-
-    std::cout << "Host Name : "<< host_name <<  "\n";
-    std::cout << " Obj Path : " << bootObjPath << "\n";
+    std::cout << " Obj Path  :"<< ipmi::boot::bootObjPath << "\n";
+    std::cout << " Host name : " << ipmi::boot::hostName << "\n";
     std::cout.flush();
 
-    setBootOrder(bootObjPath, bootSeq, bootOrderKey);
+    setBootOrder(ipmi::boot::bootObjPath, bootSeq, ipmi::boot::hostName);
 
     return ipmi::responseSuccess(data);
-
 }
 
 //----------------------------------------------------------------------
@@ -805,76 +748,54 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     std::cout << "INSTANCES :" << INSTANCES << "\n";
     std::cout.flush();
 
-    uint8_t hostId;
-    uint8_t bootOption;
-    uint8_t bootOrder;
+    uint8_t bootOption, bootOrder;
     uint8_t bootSeq[SIZE_BOOT_ORDER];
     uint8_t mode = 0;
 
-    int ctxId = ipmi::boot::findHost(ctx->hostIdx);
-
-    std::cout << "position :" << ctxId << "\n";
-    std::cout.flush();
-
-    // INITIALIZING HOST
-    if (ctxId > 0)
-    {
-       if ( INSTANCES == "1")
-       {
-          hostId = ctx->hostIdx;
-       }
-       else
-       {
-          hostId = ctxId;
-       }
-    }
-    else
+//    int h = ipmi::boot::findHost(1);
+    if( ipmi::boot::findHost(ctx->hostIdx) == -1)
     {
         phosphor::logging::log<phosphor::logging::level::ERR>(
-            "Invalid Host Id received");
+             "Invalid Host Id received");
         return ipmi::responseInvalidCommand();
     }
-
-    std::string host_name = "host" + std::to_string(hostId);
-
-    std::string bootObjPath =
-        "/xyz/openbmc_project/control/" + host_name + "/boot";
-
-    std::cout << "OBJ PATH: "<< bootObjPath <<  "\n";
+    
+    std::cout << " In get boot order \n";
     std::cout.flush();
-
     // GETTING PROPERTY OF MODE INTERFACE
 
     std::shared_ptr<sdbusplus::asio::connection> dbus = getSdBus();
 
-    std::string service = getService(*dbus, ipmi::boot::bootModeIntf, bootObjPath);
-    Value variant = getDbusProperty(*dbus, service, bootObjPath, ipmi::boot::bootModeIntf,
-                              ipmi::boot::bootModeProp);
+    std::string service =
+        getService(*dbus, ipmi::boot::bootModeIntf, ipmi::boot::bootObjPath);
+    Value variant =
+        getDbusProperty(*dbus, service, ipmi::boot::bootObjPath,
+                        ipmi::boot::bootModeIntf, ipmi::boot::bootModeProp);
 
-    auto bootMode =
-        ipmi::boot::Mode::convertModesFromString(std::get<std::string>(variant));
+    auto bootMode = ipmi::boot::Mode::convertModesFromString(
+        std::get<std::string>(variant));
 
     bootOption = ipmi::boot::modeDbusToIpmi.at(bootMode);
 
-     // GETTING PROPERTY OF SOURCE INTERFACE
+    // GETTING PROPERTY OF SOURCE INTERFACE
 
-    service = getService(*dbus, ipmi::boot::bootSourceIntf, bootObjPath);
-    variant = getDbusProperty(*dbus, service, bootObjPath, ipmi::boot::bootSourceIntf,
-                             ipmi::boot::bootSourceProp);
-    auto bootSource =
-        ipmi::boot::Source::convertSourcesFromString(std::get<std::string>(variant));
+    service =
+        getService(*dbus, ipmi::boot::bootSourceIntf, ipmi::boot::bootObjPath);
+    variant =
+        getDbusProperty(*dbus, service, ipmi::boot::bootObjPath,
+                        ipmi::boot::bootSourceIntf, ipmi::boot::bootSourceProp);
+    auto bootSource = ipmi::boot::Source::convertSourcesFromString(
+        std::get<std::string>(variant));
 
     bootOrder = ipmi::boot::sourceDbusToIpmi.at(bootSource);
 
-    std::string bootOrderKey = "KEY_BOOT_ORDER_" + std::to_string(hostId);
-
-//    std::cout << "HOST_INSTANCES    : " << INSTANCES << "\n";
-    std::cout << "HOST NAME         : " << host_name << "\n";
+    std::cout << "HOSTID            : " << ipmi::boot::hostId << "\n";
+    std::cout << "Objpath           : " << ipmi::boot::bootObjPath << "\n";
+    std::cout << "HOST NAME         : " << ipmi::boot::hostName << "\n";
     std::cout << "CTX               : " << ctx->hostIdx << "\n";
-    std::cout << "KEY               : " << bootOrderKey << "\n";
     std::cout.flush();
 
-    if (oemData.find(bootOrderKey) == oemData.end())
+    if (oemData.find(ipmi::boot::hostName) == oemData.end())
     {
         /* Return default boot order 0100090203ff */
         uint8_t defaultBoot[SIZE_BOOT_ORDER] = {
@@ -884,11 +805,12 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
         memcpy(bootSeq, defaultBoot, SIZE_BOOT_ORDER);
         phosphor::logging::log<phosphor::logging::level::INFO>(
             "Set default boot order");
-        setBootOrder(bootObjPath, defaultBoot, bootOrderKey);
+        setBootOrder(ipmi::boot::bootObjPath, defaultBoot,
+                     ipmi::boot::hostName);
     }
     else
     {
-        nlohmann::json bootMode = oemData[bootOrderKey][KEY_BOOT_MODE];
+        nlohmann::json bootMode = oemData[ipmi::boot::hostName][KEY_BOOT_MODE];
         if (bootMode["UEFI"])
             mode |= BOOT_MODE_UEFI;
         if (bootMode["CMOS_CLR"])
@@ -900,15 +822,17 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
 
         for (int i = 1; i < SIZE_BOOT_ORDER; i++)
         {
-            std::string seqStr = oemData[bootOrderKey][KEY_BOOT_SEQ][i - 1];
+            std::string seqStr =
+                oemData[ipmi::boot::hostName][KEY_BOOT_SEQ][i - 1];
             if (bootMap.find(seqStr) != bootMap.end())
                 bootSeq[i] = bootMap[seqStr];
             else
                 bootSeq[i] = 0xff;
         }
-     }
+    }
 
-    return ipmi::responseSuccess(bootOption, bootOrder, bootSeq[2], bootSeq[3], bootSeq[4], bootSeq[5]);
+    return ipmi::responseSuccess(bootOption, bootOrder, bootSeq[2], bootSeq[3],
+                                 bootSeq[4], bootSeq[5]);
 
 }
 

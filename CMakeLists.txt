@@ -77,7 +77,7 @@ message(" HOST : ${HOST_INSTANCES}")
 if(HOST_INSTANCES)
    add_definitions (-DINSTANCES="${HOST_INSTANCES}")
 else()
-   add_definitions (-DINSTANCES="1")
+   add_definitions (-DINSTANCES="0")
 endif()
 
 set_target_properties (zfboemcmds PROPERTIES VERSION "0.1.0")
