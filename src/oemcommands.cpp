@@ -230,7 +230,7 @@ std::tuple<std::string, std::string> objPath(size_t id)
 {
     std::string hostName = "host" + std::to_string(id);
     std::string bootObjPath = "/xyz/openbmc_project/control/" + hostName + "/boot";
-    return make_tuple(bootObjPath, hostName);
+    return std::make_tuple(std::move(bootObjPath), std::move(hostName));
 }
 
 } // namespace boot
@@ -732,7 +732,6 @@ ipmi::RspType<std::vector<uint8_t>>
     printf("\n");
     std::cout.flush();
 
-    std::string hostName, bootObjPath;
     std::optional<size_t> hostId = ipmi::boot::findHost(ctx->hostIdx);
     if(!hostId)
     {
@@ -740,9 +739,9 @@ ipmi::RspType<std::vector<uint8_t>>
              "Invalid Host Id received");
         return ipmi::responseInvalidCommand();
     }
-    std::tie(bootObjPath, hostName) = ipmi::boot::objPath(*hostId);
+    auto [bootObjPath, hostName] = ipmi::boot::objPath(*hostId);
 
-    std::cout << "Host ID    : " << *hostId << "\n";
+    std::cout << " Host ID    : " << *hostId << "\n";
     std::cout << " Obj Path  : " << bootObjPath << "\n";
     std::cout << " Host name : " << hostName << "\n";
     std::cout.flush();
@@ -767,7 +766,6 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
     uint8_t bootSeq[SIZE_BOOT_ORDER];
     uint8_t mode = 0;
 
-    std::string hostName, bootObjPath;
     std::optional<size_t> hostId = ipmi::boot::findHost(ctx->hostIdx);
 
     if(!hostId)
@@ -776,7 +774,7 @@ ipmi::RspType<uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t>
              "Invalid Host Id received");
         return ipmi::responseInvalidCommand();
     }
-    std::tie(bootObjPath, hostName) = ipmi::boot::objPath(*hostId);
+    auto [bootObjPath, hostName] = ipmi::boot::objPath(*hostId);
 
     std::cout << "Host ID           : " << *hostId << "\n";
     std::cout << "Objpath           : " << bootObjPath << "\n";
